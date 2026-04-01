@@ -8,4 +8,6 @@ class Routes {
   static const String pondForm = '/pond-form';
   static const String camera = '/camera';
   static const String settings = '/settings';
+  static const String adminLogin = '/admin';
+  static const String adminDashboard = '/admin/dashboard';
 }

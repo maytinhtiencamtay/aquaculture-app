@@ -166,6 +166,8 @@ const db = {
   equipment: [],
   dailylogs: [],
   waterchangelogs: [],
+  sysadmins: [],
+  licenses: [],
 };
 
 function genId() { return crypto.randomUUID(); }
@@ -2310,17 +2312,279 @@ app.post('/api/factory-reset', authMiddleware, (req, res) => {
   res.json({ message: 'Đã khôi phục cài đặt gốc thành công' });
 });
 
+// ══════════════════════════════════════════════════════════════
+// ── SYSADMIN ROUTES (Platform Admin) ──
+// ══════════════════════════════════════════════════════════════
+
+// Seed default sysadmin on first boot
+async function seedSysadmin() {
+  if (db.sysadmins.length === 0) {
+    const hashed = await bcrypt.hash('123456a@', 10);
+    db.sysadmins.push({
+      _id: genId(),
+      email: 'sanapos.vn@gmail.com',
+      password: hashed,
+      name: 'System Admin',
+      role: 'sysadmin',
+      createdAt: new Date().toISOString(),
+    });
+    saveDb();
+    console.log('Seeded default sysadmin account');
+  }
+}
+
+function sysadminMiddleware(req, res, next) {
+  const authHeader = req.headers.authorization;
+  if (!authHeader || !authHeader.startsWith('Bearer ')) {
+    return res.status(401).json({ message: 'Chưa đăng nhập' });
+  }
+  try {
+    const token = authHeader.split(' ')[1];
+    const decoded = jwt.verify(token, JWT_SECRET);
+    if (decoded.role !== 'sysadmin') {
+      return res.status(403).json({ message: 'Không có quyền truy cập' });
+    }
+    const admin = db.sysadmins.find(a => a._id === decoded.id);
+    if (!admin) return res.status(401).json({ message: 'Tài khoản không tồn tại' });
+    req.admin = { id: admin._id, role: 'sysadmin' };
+    next();
+  } catch (err) {
+    return res.status(401).json({ message: 'Token không hợp lệ hoặc đã hết hạn' });
+  }
+}
+
+// Sysadmin Login
+app.post('/api/sysadmin/login', async (req, res) => {
+  const { email, password } = req.body;
+  if (!email || !password) return res.status(400).json({ message: 'Vui lòng nhập email và mật khẩu' });
+  const admin = db.sysadmins.find(a => a.email === email);
+  if (!admin) return res.status(404).json({ message: 'Tài khoản không tồn tại' });
+  const valid = await bcrypt.compare(password, admin.password);
+  if (!valid) return res.status(401).json({ message: 'Mật khẩu không đúng' });
+  const token = jwt.sign({ id: admin._id, role: 'sysadmin' }, JWT_SECRET, { expiresIn: '7d' });
+  res.json({ id: admin._id, email: admin.email, name: admin.name, role: 'sysadmin', token });
+});
+
+// Dashboard stats
+app.get('/api/sysadmin/dashboard', sysadminMiddleware, (req, res) => {
+  const stores = db.branches.map(b => {
+    const storeEmployees = db.employees.filter(e => e.storeId === (b.storeId || b._id));
+    const owner = storeEmployees.find(e => e.role === 'owner');
+    return { ...b, storeId: b.storeId || b._id, ownerEmail: owner?.email || '', ownerName: owner?.name || '' };
+  });
+  // Deduplicate stores by storeId (first branch per storeId represents the store)
+  const storeMap = new Map();
+  stores.forEach(s => { if (!storeMap.has(s.storeId)) storeMap.set(s.storeId, s); });
+  const uniqueStores = [...storeMap.values()];
+
+  const totalStores = uniqueStores.length;
+  const totalEmployees = db.employees.length;
+  const totalPonds = db.ponds.length;
+  const totalBatches = db.fishbatches.length;
+  const activeLicenses = db.licenses.filter(l => l.status === 'active' && new Date(l.expiresAt) > new Date()).length;
+  const expiredLicenses = db.licenses.filter(l => l.status === 'active' && new Date(l.expiresAt) <= new Date()).length;
+
+  // Recent stores (last 10)
+  const recentStores = uniqueStores
+    .sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt))
+    .slice(0, 10)
+    .map(s => ({
+      _id: s.storeId,
+      name: s.name,
+      ownerEmail: s.ownerEmail,
+      ownerName: s.ownerName,
+      createdAt: s.createdAt,
+      status: s.status || 'active',
+    }));
+
+  res.json({
+    totalStores,
+    totalEmployees,
+    totalPonds,
+    totalBatches,
+    activeLicenses,
+    expiredLicenses,
+    recentStores,
+  });
+});
+
+// List all stores
+app.get('/api/sysadmin/stores', sysadminMiddleware, (req, res) => {
+  const storeMap = new Map();
+  db.branches.forEach(b => {
+    const sid = b.storeId || b._id;
+    if (!storeMap.has(sid)) storeMap.set(sid, { ...b, storeId: sid });
+  });
+
+  const stores = [...storeMap.values()].map(store => {
+    const storeEmployees = db.employees.filter(e => e.storeId === store.storeId);
+    const owner = storeEmployees.find(e => e.role === 'owner');
+    const branches = db.branches.filter(b => (b.storeId || b._id) === store.storeId);
+    const ponds = db.ponds.filter(p => p.storeId === store.storeId);
+    const license = db.licenses.find(l => l.storeId === store.storeId && l.status === 'active');
+
+    return {
+      _id: store.storeId,
+      name: store.name,
+      address: store.address || '',
+      contact: store.contact || '',
+      ownerName: owner?.name || '',
+      ownerEmail: owner?.email || '',
+      ownerPhone: owner?.phone || '',
+      employeeCount: storeEmployees.length,
+      branchCount: branches.length,
+      pondCount: ponds.length,
+      status: store.status || 'active',
+      license: license ? {
+        key: license.key,
+        plan: license.plan,
+        expiresAt: license.expiresAt,
+      } : null,
+      createdAt: store.createdAt,
+    };
+  });
+
+  stores.sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt));
+  res.json(stores);
+});
+
+// Get store detail
+app.get('/api/sysadmin/stores/:id', sysadminMiddleware, (req, res) => {
+  const storeId = req.params.id;
+  const branches = db.branches.filter(b => (b.storeId || b._id) === storeId);
+  if (branches.length === 0) return res.status(404).json({ message: 'Cửa hàng không tồn tại' });
+
+  const employees = db.employees.filter(e => e.storeId === storeId).map(e => ({
+    _id: e._id, name: e.name, email: e.email, phone: e.phone, role: e.role, hasAccount: e.hasAccount, createdAt: e.createdAt,
+  }));
+  const ponds = db.ponds.filter(p => p.storeId === storeId);
+  const zones = db.zones.filter(z => z.storeId === storeId);
+  const batches = db.fishbatches.filter(f => f.storeId === storeId);
+  const licenses = db.licenses.filter(l => l.storeId === storeId);
+  const owner = employees.find(e => e.role === 'owner');
+
+  res.json({
+    _id: storeId,
+    name: branches[0].name,
+    address: branches[0].address || '',
+    contact: branches[0].contact || '',
+    status: branches[0].status || 'active',
+    ownerName: owner?.name || '',
+    ownerEmail: owner?.email || '',
+    createdAt: branches[0].createdAt,
+    branches: branches.map(b => ({ _id: b._id, name: b.name, address: b.address })),
+    employees,
+    pondCount: ponds.length,
+    zoneCount: zones.length,
+    batchCount: batches.length,
+    licenses,
+  });
+});
+
+// Toggle store status (active/suspended)
+app.put('/api/sysadmin/stores/:id/status', sysadminMiddleware, (req, res) => {
+  const storeId = req.params.id;
+  const { status } = req.body; // 'active' or 'suspended'
+  if (!['active', 'suspended'].includes(status)) {
+    return res.status(400).json({ message: 'Trạng thái không hợp lệ' });
+  }
+  const branches = db.branches.filter(b => (b.storeId || b._id) === storeId);
+  if (branches.length === 0) return res.status(404).json({ message: 'Cửa hàng không tồn tại' });
+  branches.forEach(b => b.status = status);
+  saveDb();
+  res.json({ message: `Đã ${status === 'active' ? 'kích hoạt' : 'tạm ngưng'} cửa hàng`, status });
+});
+
+// ── License Management ──
+app.get('/api/sysadmin/licenses', sysadminMiddleware, (req, res) => {
+  const licenses = db.licenses.map(l => {
+    const store = db.branches.find(b => (b.storeId || b._id) === l.storeId);
+    return { ...l, storeName: store?.name || 'N/A' };
+  });
+  licenses.sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt));
+  res.json(licenses);
+});
+
+app.post('/api/sysadmin/licenses', sysadminMiddleware, (req, res) => {
+  const { storeId, plan, durationDays, note } = req.body;
+  if (!storeId || !plan || !durationDays) {
+    return res.status(400).json({ message: 'Thiếu thông tin bắt buộc' });
+  }
+  const store = db.branches.find(b => (b.storeId || b._id) === storeId);
+  if (!store) return res.status(404).json({ message: 'Cửa hàng không tồn tại' });
+
+  // Deactivate existing active licenses for this store
+  db.licenses.filter(l => l.storeId === storeId && l.status === 'active').forEach(l => l.status = 'replaced');
+
+  const now = new Date();
+  const expiresAt = new Date(now.getTime() + parseInt(durationDays) * 24 * 60 * 60 * 1000);
+  const key = 'AQ-' + crypto.randomUUID().replace(/-/g, '').substring(0, 16).toUpperCase();
+
+  const license = {
+    _id: genId(),
+    key,
+    storeId,
+    plan,  // 'trial', 'basic', 'pro', 'enterprise'
+    durationDays: parseInt(durationDays),
+    status: 'active',
+    note: note || '',
+    createdAt: now.toISOString(),
+    expiresAt: expiresAt.toISOString(),
+  };
+  db.licenses.push(license);
+  // Also activate the store
+  db.branches.filter(b => (b.storeId || b._id) === storeId).forEach(b => b.status = 'active');
+  saveDb();
+  res.status(201).json(license);
+});
+
+app.put('/api/sysadmin/licenses/:id', sysadminMiddleware, (req, res) => {
+  const license = db.licenses.find(l => l._id === req.params.id);
+  if (!license) return res.status(404).json({ message: 'License không tồn tại' });
+  const { status, note } = req.body;
+  if (status) license.status = status;
+  if (note !== undefined) license.note = note;
+  saveDb();
+  res.json(license);
+});
+
+app.delete('/api/sysadmin/licenses/:id', sysadminMiddleware, (req, res) => {
+  const idx = db.licenses.findIndex(l => l._id === req.params.id);
+  if (idx === -1) return res.status(404).json({ message: 'License không tồn tại' });
+  db.licenses.splice(idx, 1);
+  saveDb();
+  res.json({ message: 'Đã xóa license' });
+});
+
+// Sysadmin change password
+app.put('/api/sysadmin/password', sysadminMiddleware, async (req, res) => {
+  const { currentPassword, newPassword } = req.body;
+  if (!currentPassword || !newPassword) return res.status(400).json({ message: 'Thiếu thông tin' });
+  if (newPassword.length < 6) return res.status(400).json({ message: 'Mật khẩu mới phải có ít nhất 6 ký tự' });
+  const admin = db.sysadmins.find(a => a._id === req.admin.id);
+  if (!admin) return res.status(404).json({ message: 'Tài khoản không tồn tại' });
+  const valid = await bcrypt.compare(currentPassword, admin.password);
+  if (!valid) return res.status(401).json({ message: 'Mật khẩu hiện tại không đúng' });
+  admin.password = await bcrypt.hash(newPassword, 10);
+  saveDb();
+  res.json({ message: 'Đổi mật khẩu thành công' });
+});
+
 // ── Load persisted DB or use seed data ──
 const savedDb = loadDb();
 if (savedDb) {
   for (const key of Object.keys(savedDb)) {
     db[key] = savedDb[key];
   }
+  // Ensure new collections exist in old data
+  if (!db.sysadmins) db.sysadmins = [];
+  if (!db.licenses) db.licenses = [];
   console.log('Loaded data from', DB_FILE);
 }
 
 const PORT = process.env.PORT || 3000;
-app.listen(PORT, () => {
+app.listen(PORT, async () => {
+  await seedSysadmin();
   saveDb(); // Initial save
   console.log(`Server running on port ${PORT} (persistent file mode: ${DB_FILE})`);
 });

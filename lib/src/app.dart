@@ -3,6 +3,8 @@ import 'package:provider/provider.dart';
 
 import 'providers/theme_provider.dart';
 import 'routes.dart';
+import 'screens/admin/admin_dashboard_screen.dart';
+import 'screens/admin/admin_login_screen.dart';
 import 'screens/forgot_password_screen.dart';
 import 'screens/login_screen.dart';
 import 'screens/main_screen.dart';
@@ -33,6 +35,8 @@ class App extends StatelessWidget {
         Routes.home: (context) => const MainScreen(),
         Routes.pondDetail: (context) => const PondDetailScreen(),
         Routes.pondForm: (context) => const PondFormScreen(),
+        Routes.adminLogin: (context) => const AdminLoginScreen(),
+        Routes.adminDashboard: (context) => const AdminDashboardScreen(),
       },
     );
   }
