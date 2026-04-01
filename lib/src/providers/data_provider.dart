@@ -515,7 +515,7 @@ class DataProvider extends ChangeNotifier {
   Future<Map<String, dynamic>?> startMaintenance(Map<String, dynamic> body) async {
     final resp = await _api.post('/maintenance/start', body: body);
     if (resp.statusCode == 201 && resp.data != null) {
-      await Future.wait([reload('maintenancelogs'), reload('ponds'), reload('tasks'), reload('products')]);
+      await Future.wait([reload('maintenancelogs'), reload('ponds'), reload('tasks'), reload('products'), reload('stockissues')]);
       return resp.data as Map<String, dynamic>;
     }
     return null;

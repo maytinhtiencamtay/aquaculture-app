@@ -79,6 +79,7 @@ class StockIssue {
       case 'disposal': return 'Xuất huỷ';
       case 'transfer': return 'Xuất điều chuyển';
       case 'feeding': return 'Xuất cho ăn';
+      case 'maintenance': return 'Xuất bảo trì';
       default: return type;
     }
   }

@@ -521,83 +521,220 @@ class _WarehouseViewState extends State<WarehouseView> with SingleTickerProvider
     // Count purchase orders containing this product
     final poCount = dp.purchaseOrders.where((po) => po.items.any((item) => item['productId'] == p.id)).length;
 
+    // ── Build stock card (thẻ kho) ──
+    // Gather all stock movements: receipts (in) + issues (out)
+    final movements = <Map<String, dynamic>>[];
+    for (final r in dp.stockReceipts.where((r) => r.status == 'approved')) {
+      for (final item in r.items) {
+        if ((item['productId'] as String?) == p.id) {
+          final qty = (item['receivedQty'] as num?)?.toDouble() ?? (item['qty'] as num?)?.toDouble() ?? 0;
+          movements.add({
+            'date': r.date,
+            'code': r.code,
+            'type': 'in',
+            'label': 'Nhập kho',
+            'qty': qty,
+            'note': r.note,
+          });
+        }
+      }
+    }
+    for (final si in dp.stockIssues.where((si) => si.status == 'approved')) {
+      for (final item in si.items) {
+        if ((item['productId'] as String?) == p.id) {
+          final qty = ((item['qty'] as num?) ?? 0).toDouble();
+          movements.add({
+            'date': si.date,
+            'code': si.code,
+            'type': 'out',
+            'label': si.typeLabel,
+            'qty': qty,
+            'note': si.note,
+          });
+        }
+      }
+    }
+    // Sort by date ascending to compute running balance
+    movements.sort((a, b) => (a['date'] as DateTime).compareTo(b['date'] as DateTime));
+    double runningBalance = 0;
+    for (final m in movements) {
+      if (m['type'] == 'in') {
+        runningBalance += (m['qty'] as double);
+      } else {
+        runningBalance -= (m['qty'] as double);
+      }
+      m['balance'] = runningBalance;
+    }
+    // Reverse to show newest first
+    final movementsDesc = movements.reversed.toList();
+
     showDialog(
       context: context,
-      builder: (dCtx) => AlertDialog(
-        title: Row(children: [
-          Container(
-            padding: const EdgeInsets.all(8),
-            decoration: BoxDecoration(color: AppColors.secondary.withAlpha(20), borderRadius: BorderRadius.circular(10)),
-            child: Icon(_categoryIcon(p.category), color: AppColors.secondary, size: 20),
-          ),
-          const SizedBox(width: 10),
-          Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-            Text(p.name, style: const TextStyle(fontSize: 16)),
-            if (p.sku.isNotEmpty) Text('SKU: ${p.sku}', style: const TextStyle(fontSize: 12, color: AppColors.textSecondary, fontWeight: FontWeight.w400)),
-          ])),
-          _StatusBadge(p.categoryLabel, AppColors.secondary),
-        ]),
-        content: SizedBox(
-          width: 550,
-          child: SingleChildScrollView(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-            // ── Status badges ──
-            Wrap(spacing: 6, runSpacing: 6, children: [
-              if (!p.isActive) _detailBadge('Ngừng KD', AppColors.textHint),
-              if (p.stock <= 0) _detailBadge('Hết hàng', AppColors.error)
-              else if (p.isLowStock) _detailBadge('Sắp hết hàng', AppColors.warning),
-              if (p.isOverStock) _detailBadge('Vượt tồn tối đa', AppColors.warning),
-              if (p.isExpired) _detailBadge('Đã hết hạn!', AppColors.error),
-              if (p.isExpiringSoon) _detailBadge('Sắp hết hạn', AppColors.warning),
-              if (p.isActive && p.stock > 0 && !p.isLowStock && !p.isExpired) _detailBadge('Bình thường', AppColors.success),
-            ]),
-            const SizedBox(height: 12),
-
-            // ── Stats cards ──
-            Row(children: [
-              Expanded(child: _detailStatCard('Tồn kho', '${p.stock.toStringAsFixed(p.stock == p.stock.roundToDouble() ? 0 : 1)} ${p.unit}', AppColors.primary)),
-              const SizedBox(width: 8),
-              Expanded(child: _detailStatCard('Giá trị kho', '${_currFmt.format(p.stockValue)}đ', AppColors.secondary)),
-              const SizedBox(width: 8),
-              Expanded(child: _detailStatCard('Lợi nhuận/SP', p.costPrice > 0 ? '${_currFmt.format(p.profit)}đ' : '—', p.profit > 0 ? AppColors.success : AppColors.textHint)),
-            ]),
-            const SizedBox(height: 16),
-
-            // ── Information ──
+      builder: (dCtx) {
+        int tabIndex = 0;
+        return StatefulBuilder(builder: (dCtx, ss) => AlertDialog(
+          title: Row(children: [
             Container(
-              padding: const EdgeInsets.all(12),
-              decoration: BoxDecoration(color: AppColors.surfaceVariant, borderRadius: BorderRadius.circular(10)),
-              child: Column(children: [
-                _detailRow(Icons.sell_outlined, 'Giá bán', '${_currFmt.format(p.price)}đ / ${p.unit}'),
-                if (p.costPrice > 0) _detailRow(Icons.price_change_outlined, 'Giá nhập', '${_currFmt.format(p.costPrice)}đ / ${p.unit}'),
-                if (p.brand.isNotEmpty) _detailRow(Icons.business_center_outlined, 'Thương hiệu', p.brand),
-                if (p.origin.isNotEmpty) _detailRow(Icons.public, 'Xuất xứ', p.origin),
-                _detailRow(Icons.trending_down, 'Tồn tối thiểu', p.minStock > 0 ? '${p.minStock.toStringAsFixed(0)} ${p.unit}' : 'Chưa đặt'),
-                if (p.maxStock > 0) _detailRow(Icons.trending_up, 'Tồn tối đa', '${p.maxStock.toStringAsFixed(0)} ${p.unit}'),
-                if (p.expiryDate != null) _detailRow(Icons.timer_outlined, 'Hạn sử dụng', _dateFmt.format(p.expiryDate!)),
-                if (supplier != null) _detailRow(Icons.store_rounded, 'Nhà cung cấp', supplier.name),
-                if (p.location.isNotEmpty) _detailRow(Icons.location_on_rounded, 'Vị trí kho', p.location),
-                _detailRow(Icons.calendar_today_rounded, 'Ngày tạo', _dateFmt.format(p.createdAt)),
-                _detailRow(Icons.shopping_cart_rounded, 'Phiếu nhập liên quan', '$poCount phiếu'),
-              ]),
+              padding: const EdgeInsets.all(8),
+              decoration: BoxDecoration(color: AppColors.secondary.withAlpha(20), borderRadius: BorderRadius.circular(10)),
+              child: Icon(_categoryIcon(p.category), color: AppColors.secondary, size: 20),
             ),
-            if (p.description.isNotEmpty) ...[
-              const SizedBox(height: 12),
-              const Text('Mô tả', style: TextStyle(fontWeight: FontWeight.w700, fontSize: 13)),
-              const SizedBox(height: 4),
-              Text(p.description, style: const TextStyle(fontSize: 13, color: AppColors.textSecondary)),
-            ],
-            if (p.note.isNotEmpty) ...[
-              const SizedBox(height: 12),
-              const Text('Ghi chú', style: TextStyle(fontWeight: FontWeight.w700, fontSize: 13)),
-              const SizedBox(height: 4),
-              Text(p.note, style: const TextStyle(fontSize: 13, color: AppColors.textSecondary)),
-            ],
-          ])),
+            const SizedBox(width: 10),
+            Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+              Text(p.name, style: const TextStyle(fontSize: 16)),
+              if (p.sku.isNotEmpty) Text('SKU: ${p.sku}', style: const TextStyle(fontSize: 12, color: AppColors.textSecondary, fontWeight: FontWeight.w400)),
+            ])),
+            _StatusBadge(p.categoryLabel, AppColors.secondary),
+          ]),
+          content: SizedBox(
+            width: 600,
+            height: 500,
+            child: Column(children: [
+              // Tab bar
+              Row(children: [
+                _tabBtn('Thông tin', 0, tabIndex, (i) => ss(() => tabIndex = i)),
+                const SizedBox(width: 8),
+                _tabBtn('Thẻ kho (${movements.length})', 1, tabIndex, (i) => ss(() => tabIndex = i)),
+              ]),
+              const Divider(height: 16),
+              // Tab content
+              Expanded(child: tabIndex == 0
+                ? SingleChildScrollView(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                    // ── Status badges ──
+                    Wrap(spacing: 6, runSpacing: 6, children: [
+                      if (!p.isActive) _detailBadge('Ngừng KD', AppColors.textHint),
+                      if (p.stock <= 0) _detailBadge('Hết hàng', AppColors.error)
+                      else if (p.isLowStock) _detailBadge('Sắp hết hàng', AppColors.warning),
+                      if (p.isOverStock) _detailBadge('Vượt tồn tối đa', AppColors.warning),
+                      if (p.isExpired) _detailBadge('Đã hết hạn!', AppColors.error),
+                      if (p.isExpiringSoon) _detailBadge('Sắp hết hạn', AppColors.warning),
+                      if (p.isActive && p.stock > 0 && !p.isLowStock && !p.isExpired) _detailBadge('Bình thường', AppColors.success),
+                    ]),
+                    const SizedBox(height: 12),
+
+                    // ── Stats cards ──
+                    Row(children: [
+                      Expanded(child: _detailStatCard('Tồn kho', '${p.stock.toStringAsFixed(p.stock == p.stock.roundToDouble() ? 0 : 1)} ${p.unit}', AppColors.primary)),
+                      const SizedBox(width: 8),
+                      Expanded(child: _detailStatCard('Giá trị kho', '${_currFmt.format(p.stockValue)}đ', AppColors.secondary)),
+                      const SizedBox(width: 8),
+                      Expanded(child: _detailStatCard('Lợi nhuận/SP', p.costPrice > 0 ? '${_currFmt.format(p.profit)}đ' : '—', p.profit > 0 ? AppColors.success : AppColors.textHint)),
+                    ]),
+                    const SizedBox(height: 16),
+
+                    // ── Information ──
+                    Container(
+                      padding: const EdgeInsets.all(12),
+                      decoration: BoxDecoration(color: AppColors.surfaceVariant, borderRadius: BorderRadius.circular(10)),
+                      child: Column(children: [
+                        _detailRow(Icons.sell_outlined, 'Giá bán', '${_currFmt.format(p.price)}đ / ${p.unit}'),
+                        if (p.costPrice > 0) _detailRow(Icons.price_change_outlined, 'Giá nhập', '${_currFmt.format(p.costPrice)}đ / ${p.unit}'),
+                        if (p.brand.isNotEmpty) _detailRow(Icons.business_center_outlined, 'Thương hiệu', p.brand),
+                        if (p.origin.isNotEmpty) _detailRow(Icons.public, 'Xuất xứ', p.origin),
+                        _detailRow(Icons.trending_down, 'Tồn tối thiểu', p.minStock > 0 ? '${p.minStock.toStringAsFixed(0)} ${p.unit}' : 'Chưa đặt'),
+                        if (p.maxStock > 0) _detailRow(Icons.trending_up, 'Tồn tối đa', '${p.maxStock.toStringAsFixed(0)} ${p.unit}'),
+                        if (p.expiryDate != null) _detailRow(Icons.timer_outlined, 'Hạn sử dụng', _dateFmt.format(p.expiryDate!)),
+                        if (supplier != null) _detailRow(Icons.store_rounded, 'Nhà cung cấp', supplier.name),
+                        if (p.location.isNotEmpty) _detailRow(Icons.location_on_rounded, 'Vị trí kho', p.location),
+                        _detailRow(Icons.calendar_today_rounded, 'Ngày tạo', _dateFmt.format(p.createdAt)),
+                        _detailRow(Icons.shopping_cart_rounded, 'Phiếu nhập liên quan', '$poCount phiếu'),
+                      ]),
+                    ),
+                    if (p.description.isNotEmpty) ...[
+                      const SizedBox(height: 12),
+                      const Text('Mô tả', style: TextStyle(fontWeight: FontWeight.w700, fontSize: 13)),
+                      const SizedBox(height: 4),
+                      Text(p.description, style: const TextStyle(fontSize: 13, color: AppColors.textSecondary)),
+                    ],
+                    if (p.note.isNotEmpty) ...[
+                      const SizedBox(height: 12),
+                      const Text('Ghi chú', style: TextStyle(fontWeight: FontWeight.w700, fontSize: 13)),
+                      const SizedBox(height: 4),
+                      Text(p.note, style: const TextStyle(fontSize: 13, color: AppColors.textSecondary)),
+                    ],
+                  ]))
+                // ── TAB: THẺ KHO (Stock Card) ──
+                : movementsDesc.isEmpty
+                  ? const Center(child: Column(mainAxisSize: MainAxisSize.min, children: [
+                      Icon(Icons.receipt_long_rounded, size: 48, color: AppColors.textHint),
+                      SizedBox(height: 8),
+                      Text('Chưa có phiếu nhập/xuất nào', style: TextStyle(color: AppColors.textHint)),
+                    ]))
+                  : Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                      // Summary row
+                      Row(children: [
+                        Expanded(child: _detailStatCard('Tổng nhập', '${movements.where((m) => m['type'] == 'in').fold(0.0, (s, m) => s + (m['qty'] as double)).toStringAsFixed(1)} ${p.unit}', AppColors.success)),
+                        const SizedBox(width: 8),
+                        Expanded(child: _detailStatCard('Tổng xuất', '${movements.where((m) => m['type'] == 'out').fold(0.0, (s, m) => s + (m['qty'] as double)).toStringAsFixed(1)} ${p.unit}', AppColors.warning)),
+                        const SizedBox(width: 8),
+                        Expanded(child: _detailStatCard('Tồn hiện tại', '${p.stock.toStringAsFixed(p.stock == p.stock.roundToDouble() ? 0 : 1)} ${p.unit}', AppColors.primary)),
+                      ]),
+                      const SizedBox(height: 12),
+                      // Header
+                      Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                        decoration: BoxDecoration(color: AppColors.surfaceVariant, borderRadius: const BorderRadius.vertical(top: Radius.circular(8))),
+                        child: const Row(children: [
+                          SizedBox(width: 80, child: Text('Ngày', style: TextStyle(fontSize: 11, fontWeight: FontWeight.w700, color: AppColors.textSecondary))),
+                          SizedBox(width: 70, child: Text('Mã phiếu', style: TextStyle(fontSize: 11, fontWeight: FontWeight.w700, color: AppColors.textSecondary))),
+                          Expanded(child: Text('Loại', style: TextStyle(fontSize: 11, fontWeight: FontWeight.w700, color: AppColors.textSecondary))),
+                          SizedBox(width: 55, child: Text('Nhập', style: TextStyle(fontSize: 11, fontWeight: FontWeight.w700, color: AppColors.textSecondary), textAlign: TextAlign.right)),
+                          SizedBox(width: 55, child: Text('Xuất', style: TextStyle(fontSize: 11, fontWeight: FontWeight.w700, color: AppColors.textSecondary), textAlign: TextAlign.right)),
+                          SizedBox(width: 60, child: Text('Tồn', style: TextStyle(fontSize: 11, fontWeight: FontWeight.w700, color: AppColors.textSecondary), textAlign: TextAlign.right)),
+                        ]),
+                      ),
+                      // Movement list
+                      Expanded(
+                        child: ListView.builder(
+                          itemCount: movementsDesc.length,
+                          itemBuilder: (_, i) {
+                            final m = movementsDesc[i];
+                            final isIn = m['type'] == 'in';
+                            final date = m['date'] as DateTime;
+                            final balance = (m['balance'] as double);
+                            return Container(
+                              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+                              decoration: BoxDecoration(
+                                border: Border(bottom: BorderSide(color: AppColors.border.withAlpha(80))),
+                                color: isIn ? AppColors.success.withAlpha(8) : AppColors.warning.withAlpha(8),
+                              ),
+                              child: Row(children: [
+                                SizedBox(width: 80, child: Text(_dateFmt.format(date), style: const TextStyle(fontSize: 12))),
+                                SizedBox(width: 70, child: Text(m['code'] as String, style: const TextStyle(fontSize: 11, fontWeight: FontWeight.w600, color: AppColors.primary))),
+                                Expanded(child: Text(m['label'] as String, style: const TextStyle(fontSize: 12))),
+                                SizedBox(width: 55, child: Text(isIn ? '+${(m['qty'] as double).toStringAsFixed(1)}' : '', style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: AppColors.success), textAlign: TextAlign.right)),
+                                SizedBox(width: 55, child: Text(!isIn ? '-${(m['qty'] as double).toStringAsFixed(1)}' : '', style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: AppColors.warning), textAlign: TextAlign.right)),
+                                SizedBox(width: 60, child: Text(balance.toStringAsFixed(1), style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w700), textAlign: TextAlign.right)),
+                              ]),
+                            );
+                          },
+                        ),
+                      ),
+                    ]),
+              ),
+            ]),
+          ),
+          actions: [
+            TextButton(onPressed: () { Navigator.pop(dCtx); _showProductDialog(p); }, child: const Text('Sửa')),
+            TextButton(onPressed: () => Navigator.pop(dCtx), child: const Text('Đóng')),
+          ],
+        ));
+      },
+    );
+  }
+
+  Widget _tabBtn(String label, int index, int current, ValueChanged<int> onTap) {
+    final isActive = index == current;
+    return GestureDetector(
+      onTap: () => onTap(index),
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 7),
+        decoration: BoxDecoration(
+          color: isActive ? AppColors.primary : Colors.transparent,
+          borderRadius: BorderRadius.circular(20),
+          border: Border.all(color: isActive ? AppColors.primary : AppColors.border),
         ),
-        actions: [
-          TextButton(onPressed: () { Navigator.pop(dCtx); _showProductDialog(p); }, child: const Text('Sửa')),
-          TextButton(onPressed: () => Navigator.pop(dCtx), child: const Text('Đóng')),
-        ],
+        child: Text(label, style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600, color: isActive ? Colors.white : AppColors.textSecondary)),
       ),
     );
   }
@@ -1837,6 +1974,7 @@ class _WarehouseViewState extends State<WarehouseView> with SingleTickerProvider
                       DropdownMenuItem(value: 'usage', child: Text('Xuất sử dụng (ao nuôi)')),
                       DropdownMenuItem(value: 'feeding', child: Text('Xuất cho ăn')),
                       DropdownMenuItem(value: 'sale', child: Text('Xuất bán')),
+                      DropdownMenuItem(value: 'maintenance', child: Text('Xuất bảo trì')),
                       DropdownMenuItem(value: 'disposal', child: Text('Xuất huỷ')),
                       DropdownMenuItem(value: 'transfer', child: Text('Xuất điều chuyển')),
                     ],

@@ -725,6 +725,42 @@ app.post('/api/maintenance/start', authMiddleware, (req, res) => {
     }
   });
 
+  // 3b) Auto-create StockIssue for maintenance materials
+  if ((materials || []).length > 0) {
+    const issueItems = (materials || []).map(m => {
+      const prod = db.products.find(p => p._id === m.productId);
+      return {
+        productId: m.productId,
+        productName: prod ? prod.name : '',
+        qty: m.quantity || 0,
+        unitPrice: prod ? (prod.costPrice || prod.price || 0) : 0,
+        unit: prod ? (prod.unit || 'kg') : 'kg',
+      };
+    });
+    const totalAmount = issueItems.reduce((s, it) => s + (it.qty * it.unitPrice), 0);
+    const stockIssue = {
+      _id: genId(),
+      code: nextCode('XK', db.stockissues),
+      date: new Date().toISOString(),
+      type: 'maintenance',
+      saleOrderId: '',
+      pondId: pondId,
+      branchId: pond.branchId || '',
+      items: issueItems,
+      totalAmount,
+      status: 'approved',
+      note: `Xuất kho bảo trì ${pond.code} – ${(items || []).map(i => i.name).join(', ')}`,
+      createdBy: req.user.id || '',
+      issuedTo: '',
+      approvedBy: req.user.id || '',
+      maintenanceLogId: logId,
+      _stockProcessed: true,
+      storeId: req.user.storeId || '',
+      createdAt: new Date().toISOString(),
+    };
+    db.stockissues.push(stockIssue);
+  }
+
   // 4) Create tasks for each maintenance item
   (items || []).forEach(it => {
     const task = {
