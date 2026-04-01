@@ -14,7 +14,7 @@ class ApiResponse<T> {
 
 class ApiService {
   static final String baseUrl = kIsWeb
-      ? 'http://localhost:3000/api'
+      ? (kReleaseMode ? '/api' : 'http://localhost:3000/api')
       : 'http://10.0.2.2:3000/api';
 
   static const _timeout = Duration(seconds: 30);
