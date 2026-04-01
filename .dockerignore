@@ -1,7 +1,9 @@
 # Build
-build/
-.dart_tool/
-.packages
+build/78799c4862efeb378f26a56425f94e85/
+build/native_assets/
+build/native_hooks/
+build/flutter_assets/
+!build/web
 
 # IDE
 .idea/
