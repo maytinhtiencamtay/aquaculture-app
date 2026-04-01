@@ -1,0 +1,30 @@
+version: '3.8'
+
+services:
+  frontend:
+    image: ghcr.io/maytinhtiencamtay/aqua-frontend:latest
+    build:
+      context: .
+      dockerfile: Dockerfile
+    ports:
+      - "8080:80"
+    depends_on:
+      - backend
+    restart: always
+
+  backend:
+    image: ghcr.io/maytinhtiencamtay/aqua-backend:latest
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    ports:
+      - "3000:3000"
+    volumes:
+      - backend-data:/app/data
+    environment:
+      - NODE_ENV=production
+      - PORT=3000
+    restart: always
+
+volumes:
+  backend-data:

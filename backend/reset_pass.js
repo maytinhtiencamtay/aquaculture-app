@@ -1,0 +1,29 @@
+const bcrypt = require('bcryptjs');
+const fs = require('fs');
+const path = require('path');
+
+(async () => {
+  const dataPath = path.join(__dirname, 'data.json');
+  const data = JSON.parse(fs.readFileSync(dataPath, 'utf8'));
+  
+  const newPassword = '123456';
+  const hashed = await bcrypt.hash(newPassword, 10);
+  
+  let found = false;
+  for (const emp of data.employees) {
+    if (emp.email === 'test@test.com') {
+      emp.password = hashed;
+      found = true;
+      console.log('Reset password for:', emp.email, '-> 123456');
+      break;
+    }
+  }
+  
+  if (!found) {
+    console.log('User not found!');
+    return;
+  }
+  
+  fs.writeFileSync(dataPath, JSON.stringify(data, null, 2));
+  console.log('Done! Saved to data.json');
+})();

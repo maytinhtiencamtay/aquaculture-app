@@ -1,0 +1,13 @@
+{
+  "files.exclude": {
+    "**/build": true,
+    "**/node_modules": true,
+    "**/.dart_tool": true,
+    "**/.idea": true
+  },
+  "search.exclude": {
+    "**/build": true,
+    "**/node_modules": true,
+    "**/.dart_tool": true
+  }
+}

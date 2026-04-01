@@ -1,0 +1,27 @@
+# Build
+build/
+.dart_tool/
+.packages
+
+# IDE
+.idea/
+*.iml
+.vscode/
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Flutter
+**/android/
+**/ios/
+**/macos/
+**/linux/
+**/windows/
+
+# Node
+backend/node_modules/
+backend/.env
+
+# Misc
+*.log
