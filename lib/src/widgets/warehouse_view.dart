@@ -1975,6 +1975,7 @@ class _WarehouseViewState extends State<WarehouseView> with SingleTickerProvider
                       DropdownMenuItem(value: 'feeding', child: Text('Xuất cho ăn')),
                       DropdownMenuItem(value: 'sale', child: Text('Xuất bán')),
                       DropdownMenuItem(value: 'maintenance', child: Text('Xuất bảo trì')),
+                      DropdownMenuItem(value: 'treatment', child: Text('Xuất điều trị')),
                       DropdownMenuItem(value: 'disposal', child: Text('Xuất huỷ')),
                       DropdownMenuItem(value: 'transfer', child: Text('Xuất điều chuyển')),
                     ],
@@ -2596,21 +2597,9 @@ class _WarehouseViewState extends State<WarehouseView> with SingleTickerProvider
     );
     if (confirmed != true) return;
 
-    // ── 1. Update stock ──
-    for (final item in r.items) {
-      final productId = item['productId'] as String?;
-      if (productId == null) continue;
-      final product = dp.productById(productId);
-      if (product == null) continue;
-      final qty = ((item['receivedQty'] ?? item['qty']) as num?)?.toDouble() ?? 0;
-      await dp.update('products', productId, {
-        ...product.toJson(),
-        'stock': product.stock + qty,
-      });
-    }
-
-    // ── 2. Update receipt status → approved ──
+    // ── 1. Update receipt status → approved (backend handles stock via _onReceiptApproved) ──
     await dp.update('stockreceipts', r.id, {...r.toJson(), 'status': 'approved', 'approvedBy': dp.employees.isNotEmpty ? dp.employees.first.id : ''});
+    await dp.reload('products'); // Reload to get backend-updated stock
 
     // ── 3. Update linked PO → completed ──
     if (r.purchaseOrderId.isNotEmpty) {
@@ -2678,20 +2667,9 @@ class _WarehouseViewState extends State<WarehouseView> with SingleTickerProvider
       );
       if (proceed != true) return;
     }
-    // Deduct stock for each item
-    for (final item in si.items) {
-      final productId = item['productId'] as String?;
-      if (productId == null) continue;
-      final product = dp.productById(productId);
-      if (product == null) continue;
-      final qty = ((item['qty'] as num?) ?? 0).toDouble();
-      final newStock = (product.stock - qty).clamp(0.0, double.infinity);
-      await dp.update('products', productId, {
-        ...product.toJson(),
-        'stock': newStock,
-      });
-    }
+    // Update status → approved (backend handles stock deduction via _onIssueApproved)
     await dp.update('stockissues', si.id, {...si.toJson(), 'status': 'approved'});
+    await dp.reload('products'); // Reload to get backend-updated stock
     _snack('Đã duyệt xuất kho ${si.code} — tồn kho đã trừ');
     setState(() {});
   }
@@ -2743,18 +2721,9 @@ class _WarehouseViewState extends State<WarehouseView> with SingleTickerProvider
       ),
     );
     if (ok != true) return;
-    // Revert stock
-    for (final item in r.items) {
-      final productId = item['productId'] as String?;
-      if (productId == null) continue;
-      final product = dp.productById(productId);
-      if (product == null) continue;
-      final qty = ((item['receivedQty'] ?? item['qty']) as num?)?.toDouble() ?? 0;
-      final newStock = (product.stock - qty).clamp(0.0, double.infinity);
-      await dp.update('products', productId, {...product.toJson(), 'stock': newStock});
-    }
-    // Revert receipt → draft
-    await dp.update('stockreceipts', r.id, {...r.toJson(), 'status': 'draft', 'approvedBy': ''});
+    // Revert receipt → draft (backend handles stock reversal via _onReceiptUnapproved)
+    await dp.update('stockreceipts', r.id, {...r.toJson(), 'status': 'draft', 'approvedBy': '', '_requestUnapprove': true});
+    await dp.reload('products'); // Reload to get backend-updated stock
     // Revert linked PO → waiting_receipt
     if (r.purchaseOrderId.isNotEmpty) {
       final po = dp.purchaseOrders.where((p) => p.id == r.purchaseOrderId).firstOrNull;
@@ -2789,16 +2758,9 @@ class _WarehouseViewState extends State<WarehouseView> with SingleTickerProvider
       ),
     );
     if (ok != true) return;
-    // Revert stock (add back)
-    for (final item in si.items) {
-      final productId = item['productId'] as String?;
-      if (productId == null) continue;
-      final product = dp.productById(productId);
-      if (product == null) continue;
-      final qty = ((item['qty'] as num?) ?? 0).toDouble();
-      await dp.update('products', productId, {...product.toJson(), 'stock': product.stock + qty});
-    }
-    await dp.update('stockissues', si.id, {...si.toJson(), 'status': 'draft', 'approvedBy': ''});
+    // Revert issue → draft (backend handles stock reversal via _onIssueUnapproved)
+    await dp.update('stockissues', si.id, {...si.toJson(), 'status': 'draft', 'approvedBy': '', '_requestUnapprove': true});
+    await dp.reload('products'); // Reload to get backend-updated stock
     _snack('Đã hoàn duyệt ${si.code} — tồn kho đã cộng lại');
     setState(() {});
   }

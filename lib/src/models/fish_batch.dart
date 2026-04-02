@@ -94,8 +94,8 @@ class FishBatch {
 
   /// Số cá đã phân bổ vào ao
   int get allocatedQuantity => pondAllocations.fold<int>(0, (s, a) => s + ((a['quantity'] as num?)?.toInt() ?? 0));
-  /// Số cá chưa phân bổ
-  int get unallocatedQuantity => initialQuantity - allocatedQuantity;
+  /// Số cá chưa phân bổ (dựa trên số lượng còn sống)
+  int get unallocatedQuantity => (currentQuantity - allocatedQuantity).clamp(0, currentQuantity);
   /// Lấy số cá trong 1 ao cụ thể
   int quantityInPond(String pId) {
     // Check pondAllocations first, fall back to pondId

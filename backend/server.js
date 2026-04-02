@@ -502,7 +502,9 @@ function crudRoutes(resource) {
     if (db[resource][idx].storeId && req.user.storeId && db[resource][idx].storeId !== req.user.storeId) {
       return res.status(403).json({ message: 'Không có quyền chỉnh sửa' });
     }
-    db[resource][idx] = { ...db[resource][idx], ...req.body };
+    // Strip protected fields from body
+    const { _id, createdAt, ...safeBody } = req.body;
+    db[resource][idx] = { ...db[resource][idx], ...safeBody, updatedAt: new Date().toISOString() };
     saveDb();
     res.json(db[resource][idx]);
   });
@@ -681,6 +683,20 @@ app.post('/api/maintenance/start', authMiddleware, (req, res) => {
   const pond = db.ponds.find(p => p._id === pondId);
   if (!pond) return res.status(404).json({ message: 'Pond not found' });
 
+  // 0) Validate stock sufficiency BEFORE any state changes
+  const insufficientStock = [];
+  (materials || []).forEach(m => {
+    const prod = db.products.find(p => p._id === m.productId);
+    if (prod) {
+      if ((prod.stock || 0) < (m.quantity || 0)) {
+        insufficientStock.push(`${prod.name}: còn ${prod.stock} ${prod.unit}, cần ${m.quantity}`);
+      }
+    }
+  });
+  if (insufficientStock.length > 0) {
+    return res.status(400).json({ message: `Tồn kho không đủ:\n${insufficientStock.join('\n')}` });
+  }
+
   // 1) Create maintenance log
   const logId = genId();
   const log = {
@@ -705,19 +721,7 @@ app.post('/api/maintenance/start', authMiddleware, (req, res) => {
     db.ponds[pIdx] = { ...db.ponds[pIdx], status: 'maintenance', updatedAt: new Date().toISOString() };
   }
 
-  // 3) Deduct materials from warehouse (with stock validation)
-  const insufficientStock = [];
-  (materials || []).forEach(m => {
-    const prod = db.products.find(p => p._id === m.productId);
-    if (prod) {
-      if ((prod.stock || 0) < (m.quantity || 0)) {
-        insufficientStock.push(`${prod.name}: còn ${prod.stock} ${prod.unit}, cần ${m.quantity}`);
-      }
-    }
-  });
-  if (insufficientStock.length > 0) {
-    return res.status(400).json({ message: `Tồn kho không đủ:\n${insufficientStock.join('\n')}` });
-  }
+  // 3) Deduct materials from warehouse (already validated above)
   (materials || []).forEach(m => {
     const prod = db.products.find(p => p._id === m.productId);
     if (prod) {
@@ -1283,7 +1287,9 @@ saleRouter.put('/:id', (req, res) => {
     return res.status(403).json({ message: 'Không có quyền chỉnh sửa' });
   }
   const oldStatus = db.saleorders[idx].status;
-  db.saleorders[idx] = { ...db.saleorders[idx], ...req.body };
+  // Don't let client override _saleProcessed
+  const { _saleProcessed, ...safeBody } = req.body;
+  db.saleorders[idx] = { ...db.saleorders[idx], ...safeBody };
   const updated = db.saleorders[idx];
 
   // Trigger cascade when status changes to completed
@@ -1311,28 +1317,47 @@ saleRouter.delete('/:id', (req, res) => {
 });
 
 function _onSaleCompleted(order) {
+  // Prevent duplicate processing
+  if (order._saleProcessed) return;
+  order._saleProcessed = true;
+
   // 0) Deduct fish from fishBatch
   if (order.fishBatchId && order.items && order.items.length > 0) {
     const batch = db.fishbatches.find(b => b._id === order.fishBatchId);
     if (batch) {
       const totalSold = order.items.reduce((s, it) => s + (it.qty || it.quantity || 0), 0);
-      batch.currentQuantity = Math.max(0, (batch.currentQuantity || 0) - totalSold);
+      // Validate: don't sell more than available
+      const available = batch.currentQuantity || 0;
+      const actualSold = Math.min(totalSold, available);
+      batch.currentQuantity = Math.max(0, available - actualSold);
       // Update pondAllocations
       if (batch.pondAllocations && order.pondId) {
         const alloc = batch.pondAllocations.find(a => a.pondId === order.pondId);
         if (alloc) {
-          alloc.quantity = Math.max(0, (alloc.quantity || 0) - totalSold);
+          alloc.quantity = Math.max(0, (alloc.quantity || 0) - actualSold);
           if (alloc.quantity <= 0) batch.pondAllocations = batch.pondAllocations.filter(a => a.pondId !== order.pondId);
         }
       }
       if (batch.currentQuantity <= 0) batch.status = 'harvested';
       batch.updatedAt = new Date().toISOString();
+
+      // Deactivate pond if no more active fish
+      if (batch.currentQuantity <= 0 && order.pondId) {
+        const activeBatches = db.fishbatches.filter(b => b.status === 'active' && (
+          b.pondId === order.pondId || (b.pondAllocations || []).some(a => a.pondId === order.pondId)
+        ));
+        if (activeBatches.length === 0) {
+          const pond = db.ponds.find(p => p._id === order.pondId);
+          if (pond) { pond.status = 'inactive'; pond.updatedAt = new Date().toISOString(); }
+        }
+      }
     }
   }
 
-  // 1) Auto-create StockIssue for sale items
-  if (order.items && order.items.length > 0) {
-    const issueItems = order.items.map(it => ({
+  // 1) Auto-create StockIssue for sale items (only for product-based items)
+  const productItems = (order.items || []).filter(it => it.productId);
+  if (productItems.length > 0) {
+    const issueItems = productItems.map(it => ({
       productId: it.productId || '',
       productName: it.productName || it.product || '',
       qty: it.qty || it.quantity || 0,
@@ -1354,6 +1379,7 @@ function _onSaleCompleted(order) {
       createdBy: order.createdBy || '1',
       issuedTo: '',
       approvedBy: order.createdBy || '1',
+      _stockProcessed: true,
       createdAt: new Date().toISOString(),
     };
     db.stockissues.push(stockIssue);
@@ -1438,7 +1464,8 @@ srRouter.get('/:id', (req, res) => {
   item ? res.json(item) : res.status(404).json({ message: 'Not found' });
 });
 srRouter.post('/', (req, res) => {
-  const item = { _id: genId(), ...req.body, createdAt: new Date().toISOString() };
+  const { _stockProcessed, ...safeBody } = req.body;
+  const item = { _id: genId(), ...safeBody, createdAt: new Date().toISOString() };
   db.stockreceipts.push(item);
   if (item.status === 'approved') _onReceiptApproved(item);
   saveDb();
@@ -1451,11 +1478,19 @@ srRouter.put('/:id', (req, res) => {
     return res.status(403).json({ message: 'Không có quyền chỉnh sửa' });
   }
   const oldStatus = db.stockreceipts[idx].status;
-  db.stockreceipts[idx] = { ...db.stockreceipts[idx], ...req.body };
+  const wasProcessed = db.stockreceipts[idx]._stockProcessed;
+  // Don't let client override _stockProcessed
+  const { _stockProcessed, ...safeBody } = req.body;
+  db.stockreceipts[idx] = { ...db.stockreceipts[idx], ...safeBody };
   const updated = db.stockreceipts[idx];
 
+  // Approve: add stock
   if (oldStatus !== 'approved' && updated.status === 'approved') {
     _onReceiptApproved(updated);
+  }
+  // Unapprove: reverse stock
+  if (oldStatus === 'approved' && updated.status === 'draft' && wasProcessed) {
+    _onReceiptUnapproved(updated);
   }
   saveDb();
   res.json(updated);
@@ -1510,6 +1545,21 @@ function _onReceiptApproved(receipt) {
 
 app.use('/api/stockreceipts', srRouter);
 
+// Reverse stock when unapproving a receipt
+function _onReceiptUnapproved(receipt) {
+  if (!receipt.items || !receipt._stockProcessed) return;
+  for (const it of receipt.items) {
+    if (it.productId) {
+      const prod = db.products.find(p => p._id === it.productId);
+      if (prod) {
+        const qty = it.receivedQty || it.qty || 0;
+        prod.stock = Math.max(0, (prod.stock || 0) - qty);
+      }
+    }
+  }
+  receipt._stockProcessed = false;
+}
+
 // ── STOCK ISSUES ─────────────────────────────────────────────────────────
 // When a stock issue is approved:
 //   1. Decrease Product.stock by qty for each item
@@ -1526,7 +1576,8 @@ siRouter.get('/:id', (req, res) => {
   item ? res.json(item) : res.status(404).json({ message: 'Not found' });
 });
 siRouter.post('/', (req, res) => {
-  const item = { _id: genId(), ...req.body, createdAt: new Date().toISOString() };
+  const { _stockProcessed, _saleProcessed, _debtProcessed, ...safeBody } = req.body;
+  const item = { _id: genId(), ...safeBody, createdAt: new Date().toISOString() };
   db.stockissues.push(item);
   if (item.status === 'approved') _onIssueApproved(item);
   saveDb();
@@ -1539,11 +1590,19 @@ siRouter.put('/:id', (req, res) => {
     return res.status(403).json({ message: 'Không có quyền chỉnh sửa' });
   }
   const oldStatus = db.stockissues[idx].status;
-  db.stockissues[idx] = { ...db.stockissues[idx], ...req.body };
+  const wasProcessed = db.stockissues[idx]._stockProcessed;
+  // Don't let client override _stockProcessed
+  const { _stockProcessed, ...safeBody } = req.body;
+  db.stockissues[idx] = { ...db.stockissues[idx], ...safeBody };
   const updated = db.stockissues[idx];
 
+  // Approve: deduct stock
   if (oldStatus !== 'approved' && updated.status === 'approved') {
     _onIssueApproved(updated);
+  }
+  // Unapprove: reverse stock
+  if (oldStatus === 'approved' && updated.status === 'draft' && wasProcessed) {
+    _onIssueUnapproved(updated);
   }
   saveDb();
   res.json(updated);
@@ -1573,11 +1632,17 @@ function _onIssueApproved(issue) {
   if (issue._stockProcessed) return;
   issue._stockProcessed = true;
 
-  // 1) Decrease product stock
+  // 1) Decrease product stock (log warning if insufficient, but clamp to 0)
   for (const it of issue.items) {
     if (it.productId) {
       const prod = db.products.find(p => p._id === it.productId);
-      if (prod) prod.stock = Math.max(0, (prod.stock || 0) - (it.qty || 0));
+      if (prod) {
+        const qty = it.qty || 0;
+        if (qty > (prod.stock || 0)) {
+          console.warn(`[WARNING] Stock issue ${issue.code || issue._id}: ${prod.name} stock ${prod.stock} < requested ${qty}, clamping to 0`);
+        }
+        prod.stock = Math.max(0, (prod.stock || 0) - qty);
+      }
     }
   }
 
@@ -1639,6 +1704,18 @@ function _onIssueApproved(issue) {
       db.feedinglogs.push(log);
     }
   }
+}
+
+// Reverse stock when unapproving an issue
+function _onIssueUnapproved(issue) {
+  if (!issue.items || !issue._stockProcessed) return;
+  for (const it of issue.items) {
+    if (it.productId) {
+      const prod = db.products.find(p => p._id === it.productId);
+      if (prod) prod.stock = (prod.stock || 0) + (it.qty || 0);
+    }
+  }
+  issue._stockProcessed = false;
 }
 
 app.use('/api/stockissues', siRouter);
@@ -1733,7 +1810,9 @@ pvRouter.put('/:id', (req, res) => {
   if (idx === -1) return res.status(404).json({ message: 'Not found' });
   const old = { ...db.paymentvouchers[idx] };
   const oldStatus = old.status;
-  db.paymentvouchers[idx] = { ...old, ...req.body };
+  // Don't let client override _debtProcessed
+  const { _debtProcessed, ...safeBody } = req.body;
+  db.paymentvouchers[idx] = { ...old, ...safeBody };
   const updated = db.paymentvouchers[idx];
   const action = (oldStatus !== 'confirmed' && updated.status === 'confirmed') ? 'confirm' : 'update';
   _auditPV(action, updated, old, req.body.approvedBy || req.body.createdBy);
@@ -1748,7 +1827,14 @@ pvRouter.put('/:id', (req, res) => {
 pvRouter.stack = pvRouter.stack.filter(l => !l.route?.methods?.delete);
 pvRouter.delete('/:id', (req, res) => {
   const item = db.paymentvouchers.find(i => i._id === req.params.id);
-  if (item) _auditPV('delete', item, item, '');
+  if (item) {
+    _auditPV('delete', item, item, '');
+    // Reverse debt changes if voucher was confirmed
+    if (item._debtProcessed && item.type === 'receipt' && item.contactType === 'customer' && item.contactId) {
+      const cust = db.customers.find(c => c._id === item.contactId);
+      if (cust) cust.debt = (cust.debt || 0) + (item.amount || 0);
+    }
+  }
   db.paymentvouchers = db.paymentvouchers.filter(i => i._id !== req.params.id);
   saveDb();
   res.json({ message: 'Deleted' });
@@ -1859,6 +1945,10 @@ app.post('/api/harvest', authMiddleware, (req, res) => {
   if (batch.status !== 'active') return res.status(400).json({ message: 'Lô cá không ở trạng thái hoạt động' });
 
   const qty = harvestQuantity || batch.currentQuantity;
+  // Validate harvest quantity doesn't exceed current quantity
+  if (qty > (batch.currentQuantity || 0)) {
+    return res.status(400).json({ message: `Số lượng thu hoạch (${qty}) vượt quá số lượng hiện có (${batch.currentQuantity})` });
+  }
   const weight = harvestWeight || (qty * (batch.currentWeight || 0) / 1000);
   const totalRevenue = (weight * (pricePerKg || 0));
 
@@ -2142,8 +2232,11 @@ app.post('/api/feedinglogs', authMiddleware, (req, res) => {
     }
   }
 
-  // Decrease product stock
+  // Decrease product stock (with validation)
   if (prod) {
+    if ((prod.stock || 0) < quantity) {
+      return res.status(400).json({ message: `Tồn kho không đủ: ${prod.name} còn ${prod.stock} ${prod.unit}, cần ${quantity}` });
+    }
     prod.stock = Math.max(0, (prod.stock || 0) - quantity);
   }
 
@@ -2183,6 +2276,10 @@ app.post('/api/mortalitylogs', authMiddleware, (req, res) => {
 
   const batch = db.fishbatches.find(b => b._id === fishBatchId);
   if (batch) {
+    // Validate batch is active
+    if (batch.status !== 'active') {
+      return res.status(400).json({ message: `Lô cá đang ở trạng thái "${batch.status}", không thể ghi hao hụt` });
+    }
     // Validate quantity doesn't exceed current quantity
     if (quantity > (batch.currentQuantity || 0)) {
       return res.status(400).json({ message: `Số lượng hao hụt (${quantity}) vượt quá số lượng hiện có (${batch.currentQuantity})` });

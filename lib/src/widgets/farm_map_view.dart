@@ -1286,6 +1286,13 @@ class _FarmMapViewState extends State<FarmMapView> {
                     onTap: () { Navigator.pop(ctx); _showStockFishDialog(pond); },
                   ),
                   _ActionButton(
+                    icon: Icons.undo_rounded,
+                    label: 'Rút cá',
+                    color: const Color(0xFFE65100),
+                    enabled: activeBatches.isNotEmpty,
+                    onTap: () { Navigator.pop(ctx); _showWithdrawFishDialog(pond, activeBatches); },
+                  ),
+                  _ActionButton(
                     icon: Icons.swap_horiz_rounded,
                     label: 'Chuyển cá',
                     color: AppColors.info,
@@ -1780,82 +1787,281 @@ class _FarmMapViewState extends State<FarmMapView> {
   }
 
   Future<void> _showQuickTreatmentDialog(Pond pond) async {
-    final medC = TextEditingController();
-    final doseC = TextEditingController();
     final durC = TextEditingController(text: '3');
     final wdC = TextEditingController(text: '0');
+    final noteC = TextEditingController();
     String method = 'bath';
     String diseaseLogId = '';
     final pondDiseases = dp.diseaseLogs.where((d) => d.pondId == pond.id && d.status != 'resolved').toList();
+    // Medicine line items from inventory
+    final medicineProducts = dp.products.where((p) => p.category == 'medicine' || p.category == 'chemical').toList();
+    final lineItems = <Map<String, dynamic>>[];
+    // Auto-add first medicine line
+    if (medicineProducts.isNotEmpty) {
+      final first = medicineProducts.first;
+      lineItems.add({
+        'productId': first.id,
+        'productName': first.name,
+        'qty': 0.0,
+        'unitPrice': first.costPrice > 0 ? first.costPrice : first.price,
+        'unit': first.unit,
+      });
+    }
 
     final ok = await showDialog<bool>(
       context: context,
       builder: (ctx) => StatefulBuilder(
-        builder: (ctx, setSt) => AlertDialog(
-          title: const Text('Thêm điều trị'),
-          content: SizedBox(
-            width: 420,
-            child: SingleChildScrollView(child: Column(mainAxisSize: MainAxisSize.min, children: [
-              if (pondDiseases.isNotEmpty)
-                DropdownButtonFormField<String>(
-                  value: diseaseLogId.isEmpty ? null : diseaseLogId,
-                  decoration: const InputDecoration(labelText: 'Bệnh liên quan', prefixIcon: Icon(Icons.coronavirus)),
-                  items: pondDiseases.map((d) => DropdownMenuItem(value: d.id, child: Text(d.diseaseName))).toList(),
-                  onChanged: (v) => setSt(() => diseaseLogId = v ?? ''),
-                ),
-              if (pondDiseases.isNotEmpty) const SizedBox(height: 10),
-              TextField(controller: medC, decoration: const InputDecoration(labelText: 'Tên thuốc *', prefixIcon: Icon(Icons.medical_services))),
-              const SizedBox(height: 10),
-              Row(children: [
-                Expanded(child: TextField(controller: doseC, decoration: const InputDecoration(labelText: 'Liều lượng'), keyboardType: TextInputType.number)),
-                const SizedBox(width: 8),
-                Expanded(child: DropdownButtonFormField<String>(
-                  value: method,
-                  decoration: const InputDecoration(labelText: 'Cách dùng'),
-                  items: const [
-                    DropdownMenuItem(value: 'bath', child: Text('Tắm')),
-                    DropdownMenuItem(value: 'feed_mix', child: Text('Trộn TĂ')),
-                    DropdownMenuItem(value: 'splash', child: Text('Tát')),
-                  ],
-                  onChanged: (v) => setSt(() => method = v ?? 'bath'),
-                )),
-              ]),
-              const SizedBox(height: 10),
-              Row(children: [
-                Expanded(child: TextField(controller: durC, decoration: const InputDecoration(labelText: 'Ngày điều trị'), keyboardType: TextInputType.number)),
-                const SizedBox(width: 8),
-                Expanded(child: TextField(controller: wdC, decoration: const InputDecoration(labelText: 'Ngày cách ly'), keyboardType: TextInputType.number)),
-              ]),
-            ])),
-          ),
-          actions: [
-            TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('Huỷ')),
-            FilledButton(onPressed: () => Navigator.pop(ctx, true), child: const Text('Thêm')),
-          ],
-        ),
+        builder: (ctx, ss) {
+          final usedProductIds = lineItems.map((i) => i['productId'] as String).toSet();
+          double total = 0;
+          bool hasOverStock = false;
+          bool hasZeroQty = false;
+          for (final item in lineItems) {
+            final qty = ((item['qty'] as num?) ?? 0).toDouble();
+            total += qty * ((item['unitPrice'] as num?) ?? 0).toDouble();
+            final prod = dp.productById(item['productId'] as String? ?? '');
+            if (prod != null && qty > prod.stock) hasOverStock = true;
+            if (qty <= 0) hasZeroQty = true;
+          }
+          final canSubmit = lineItems.isNotEmpty && !hasOverStock && !hasZeroQty;
+
+          return AlertDialog(
+            title: const Text('Thêm điều trị'),
+            content: SizedBox(
+              width: 480,
+              child: SingleChildScrollView(child: Column(mainAxisSize: MainAxisSize.min, children: [
+                if (pondDiseases.isNotEmpty)
+                  DropdownButtonFormField<String>(
+                    value: diseaseLogId.isEmpty ? null : diseaseLogId,
+                    decoration: const InputDecoration(labelText: 'Bệnh liên quan', prefixIcon: Icon(Icons.coronavirus)),
+                    items: pondDiseases.map((d) => DropdownMenuItem(value: d.id, child: Text(d.diseaseName))).toList(),
+                    onChanged: (v) => ss(() => diseaseLogId = v ?? ''),
+                  ),
+                if (pondDiseases.isNotEmpty) const SizedBox(height: 10),
+                Row(children: [
+                  Expanded(child: DropdownButtonFormField<String>(
+                    value: method,
+                    decoration: const InputDecoration(labelText: 'Cách dùng', prefixIcon: Icon(Icons.medical_services)),
+                    items: const [
+                      DropdownMenuItem(value: 'bath', child: Text('Tắm')),
+                      DropdownMenuItem(value: 'feed_mix', child: Text('Trộn TĂ')),
+                      DropdownMenuItem(value: 'splash', child: Text('Tát')),
+                    ],
+                    onChanged: (v) => ss(() => method = v ?? 'bath'),
+                  )),
+                ]),
+                const SizedBox(height: 10),
+                Row(children: [
+                  Expanded(child: TextField(controller: durC, decoration: const InputDecoration(labelText: 'Ngày điều trị'), keyboardType: TextInputType.number)),
+                  const SizedBox(width: 8),
+                  Expanded(child: TextField(controller: wdC, decoration: const InputDecoration(labelText: 'Ngày cách ly'), keyboardType: TextInputType.number)),
+                ]),
+                const SizedBox(height: 16),
+                // ── Thuốc / Hóa chất từ kho ──
+                Row(children: [
+                  const Icon(Icons.inventory_2, size: 18, color: AppColors.primary),
+                  const SizedBox(width: 6),
+                  const Text('Thuốc / Hóa chất xuất kho', style: TextStyle(fontWeight: FontWeight.w700, fontSize: 14)),
+                  const Spacer(),
+                  TextButton.icon(
+                    onPressed: medicineProducts.isEmpty ? null : () => ss(() {
+                      final available = medicineProducts.where((p) => !usedProductIds.contains(p.id)).toList();
+                      final first = available.isNotEmpty ? available.first : (medicineProducts.isNotEmpty ? medicineProducts.first : null);
+                      if (first != null) {
+                        lineItems.add({
+                          'productId': first.id,
+                          'productName': first.name,
+                          'qty': 0.0,
+                          'unitPrice': first.costPrice > 0 ? first.costPrice : first.price,
+                          'unit': first.unit,
+                        });
+                      }
+                    }),
+                    icon: const Icon(Icons.add_circle, size: 18),
+                    label: const Text('Thêm dòng'),
+                  ),
+                ]),
+                if (medicineProducts.isEmpty)
+                  const Padding(
+                    padding: EdgeInsets.symmetric(vertical: 8),
+                    child: Text('Chưa có thuốc/hóa chất trong kho. Vui lòng thêm sản phẩm loại "Thuốc" hoặc "Hóa chất" trước.',
+                      style: TextStyle(color: AppColors.warning, fontSize: 12)),
+                  ),
+                ...lineItems.asMap().entries.map((entry) {
+                  final idx = entry.key;
+                  final item = entry.value;
+                  final currentPid = item['productId'] as String? ?? '';
+                  final prod = dp.productById(currentPid);
+                  final qty = ((item['qty'] as num?) ?? 0).toDouble();
+                  final stock = prod?.stock ?? 0;
+                  final overStock = prod != null && qty > stock;
+                  final zeroQty = qty <= 0;
+                  final availableProducts = medicineProducts.where((p) => p.id == currentPid || !usedProductIds.contains(p.id)).toList();
+
+                  return Container(
+                    key: ValueKey('treat_line_$idx'),
+                    margin: const EdgeInsets.only(bottom: 8),
+                    padding: const EdgeInsets.all(10),
+                    decoration: BoxDecoration(
+                      color: overStock ? AppColors.error.withAlpha(10) : AppColors.surfaceVariant,
+                      borderRadius: BorderRadius.circular(10),
+                      border: overStock ? Border.all(color: AppColors.error.withAlpha(80)) : null,
+                    ),
+                    child: Column(children: [
+                      Row(children: [
+                        Expanded(
+                          child: DropdownButtonFormField<String>(
+                            key: ValueKey('treat_prod_${idx}_$currentPid'),
+                            initialValue: currentPid,
+                            decoration: const InputDecoration(labelText: 'Thuốc / Hóa chất', isDense: true, contentPadding: EdgeInsets.symmetric(horizontal: 10, vertical: 8)),
+                            items: availableProducts.map((p) => DropdownMenuItem(value: p.id, child: Text('${p.name} (tồn: ${p.stock.toStringAsFixed(0)})', overflow: TextOverflow.ellipsis))).toList(),
+                            onChanged: (v) => ss(() {
+                              final p = dp.productById(v!);
+                              item['productId'] = v;
+                              item['productName'] = p?.name ?? '';
+                              item['unitPrice'] = p != null ? (p.costPrice > 0 ? p.costPrice : p.price) : 0;
+                              item['unit'] = p?.unit ?? 'kg';
+                            }),
+                          ),
+                        ),
+                        const SizedBox(width: 8),
+                        IconButton(icon: const Icon(Icons.delete, color: AppColors.error, size: 20), onPressed: () => ss(() => lineItems.removeAt(idx))),
+                      ]),
+                      const SizedBox(height: 8),
+                      Row(children: [
+                        Expanded(child: TextFormField(
+                          key: ValueKey('treat_qty_${idx}_$currentPid'),
+                          initialValue: qty > 0 ? qty.toStringAsFixed(1) : '',
+                          decoration: InputDecoration(
+                            labelText: 'SL xuất (${item['unit'] ?? ''})',
+                            isDense: true,
+                            contentPadding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+                            helperText: prod != null ? 'Tồn: ${stock.toStringAsFixed(0)}' : null,
+                            helperStyle: TextStyle(fontSize: 11, color: overStock ? AppColors.error : null),
+                            errorText: overStock ? 'Vượt tồn kho!' : (zeroQty && prod != null ? 'Nhập SL > 0' : null),
+                            errorStyle: const TextStyle(fontSize: 11),
+                          ),
+                          keyboardType: TextInputType.number,
+                          onChanged: (v) => ss(() => item['qty'] = double.tryParse(v) ?? 0),
+                        )),
+                        const SizedBox(width: 8),
+                        Expanded(child: TextFormField(
+                          key: ValueKey('treat_price_${idx}_$currentPid'),
+                          initialValue: ((item['unitPrice'] as num?) ?? 0) > 0 ? (item['unitPrice'] as num).toString() : '',
+                          decoration: const InputDecoration(labelText: 'Đơn giá (vốn)', isDense: true, contentPadding: EdgeInsets.symmetric(horizontal: 10, vertical: 8)),
+                          keyboardType: TextInputType.number,
+                          onChanged: (v) => ss(() => item['unitPrice'] = double.tryParse(v) ?? 0),
+                        )),
+                      ]),
+                    ]),
+                  );
+                }),
+                if (hasOverStock)
+                  Padding(
+                    padding: const EdgeInsets.only(top: 4, bottom: 4),
+                    child: Row(children: [
+                      const Icon(Icons.warning_rounded, size: 16, color: AppColors.warning),
+                      const SizedBox(width: 6),
+                      const Expanded(child: Text('Có sản phẩm xuất vượt tồn kho', style: TextStyle(color: AppColors.warning, fontSize: 12, fontWeight: FontWeight.w600))),
+                    ]),
+                  ),
+                if (lineItems.isNotEmpty) ...[
+                  const Divider(),
+                  Row(mainAxisAlignment: MainAxisAlignment.end, children: [
+                    const Text('Tổng giá trị: ', style: TextStyle(fontWeight: FontWeight.w600)),
+                    Text('${total.toStringAsFixed(0)}đ', style: const TextStyle(fontWeight: FontWeight.w800, fontSize: 16, color: AppColors.warning)),
+                  ]),
+                ],
+                const SizedBox(height: 8),
+                TextField(controller: noteC, decoration: const InputDecoration(labelText: 'Ghi chú', prefixIcon: Icon(Icons.note)), maxLines: 2),
+              ])),
+            ),
+            actions: [
+              TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('Huỷ')),
+              FilledButton.icon(
+                onPressed: canSubmit ? () => Navigator.pop(ctx, true) : null,
+                icon: const Icon(Icons.medical_services),
+                label: const Text('Thêm điều trị'),
+              ),
+            ],
+          );
+        },
       ),
     );
-    if (ok == true && medC.text.isNotEmpty) {
+    if (ok == true && lineItems.isNotEmpty) {
       final dur = int.tryParse(durC.text) ?? 3;
       final wd = int.tryParse(wdC.text) ?? 0;
       final start = DateTime.now();
       final end = start.add(Duration(days: dur));
       final safe = end.add(Duration(days: wd));
+
+      // Build medicine names for treatment log
+      final medicineNames = lineItems.map((i) => i['productName'] as String).join(', ');
+
+      // 1. Create treatment log
       await dp.create('treatmentlogs', {
         'pondId': pond.id, 'diseaseLogId': diseaseLogId,
-        'medicineName': medC.text,
-        'dosage': double.tryParse(doseC.text) ?? 0, 'dosageUnit': 'ml/m3',
+        'medicineName': medicineNames,
+        'dosage': 0, 'dosageUnit': 'ml/m3',
         'method': method, 'durationDays': dur, 'withdrawalDays': wd,
         'startDate': start.toIso8601String(),
         'endDate': end.toIso8601String(),
         'safeHarvestDate': wd > 0 ? safe.toIso8601String() : null,
+        'cost': lineItems.fold<double>(0, (s, i) => s + ((i['qty'] as num?) ?? 0).toDouble() * ((i['unitPrice'] as num?) ?? 0).toDouble()),
         'status': 'in_progress',
+        'note': noteC.text,
       });
-      // Also update disease status to treating
+
+      // 2. Create stock issue for medicine/chemical
+      final existingCodes = dp.stockIssues.map((si) => si.code).toList();
+      int maxNum = 0;
+      for (final c in existingCodes) {
+        final m = RegExp(r'XK-(\d+)').firstMatch(c);
+        if (m != null) {
+          final n = int.tryParse(m.group(1)!) ?? 0;
+          if (n > maxNum) maxNum = n;
+        }
+      }
+      final issueCode = 'XK-${(maxNum + 1).toString().padLeft(3, '0')}';
+
+      double total = 0;
+      for (final item in lineItems) {
+        total += ((item['qty'] as num?) ?? 0) * ((item['unitPrice'] as num?) ?? 0);
+      }
+
+      final batches = dp.fishBatches.where((b) => b.pondIds.contains(pond.id)).toList();
+      final batchId = batches.isNotEmpty ? batches.map((b) => b.id).join(',') : '';
+
+      // Determine branch from pond's zone
+      String branchId = '';
+      if (pond.zoneId != null) {
+        final zone = dp.zones.where((z) => z.id == pond.zoneId).firstOrNull;
+        branchId = zone?.branchId ?? '';
+      }
+
+      await dp.create('stockissues', {
+        'code': issueCode,
+        'date': DateTime.now().toIso8601String(),
+        'type': 'treatment',
+        'pondId': pond.id,
+        'fishBatchId': batchId,
+        'branchId': branchId,
+        'items': lineItems,
+        'totalAmount': total,
+        'status': 'approved',
+        'note': 'Điều trị Ao ${pond.code} — $medicineNames${noteC.text.isNotEmpty ? ' — ${noteC.text}' : ''}',
+        'createdBy': '',
+        'issuedTo': '',
+      });
+
+      // 3. Update disease status
       if (diseaseLogId.isNotEmpty) {
         await dp.update('diseaselogs', diseaseLogId, {'status': 'treating'});
       }
-      _showSnack('Đã thêm phác đồ điều trị');
+
+      await dp.reload('stockissues');
+      await dp.reload('products');
+      _showSnack('Đã thêm điều trị & tạo phiếu xuất kho $issueCode');
     }
   }
 
@@ -2084,8 +2290,16 @@ class _FarmMapViewState extends State<FarmMapView> {
 
     if (ok == true && selectedBatch != null && qtyC.text.isNotEmpty) {
       final qty = int.tryParse(qtyC.text) ?? 0;
-      if (qty <= 0) return;
       final batch = selectedBatch!;
+      final avail = batch.unallocatedQuantity;
+      if (qty <= 0) {
+        _showSnack('Số lượng phải lớn hơn 0');
+        return;
+      }
+      if (qty > avail) {
+        _showSnack('Số lượng vượt quá số cá chưa phân bổ ($avail con)');
+        return;
+      }
       // Thêm allocation vào lô cá
       final newAllocs = List<Map<String, dynamic>>.from(batch.pondAllocations);
       final existIdx = newAllocs.indexWhere((a) => a['pondId'] == pond.id);
@@ -2104,6 +2318,188 @@ class _FarmMapViewState extends State<FarmMapView> {
         await dp.update('ponds', pond.id, {...pond.toJson(), 'status': 'active'});
       }
       _showSnack('Đã thả ${qty} con vào ${pond.code}');
+    }
+  }
+
+  // 1b) RÚT CÁ / HUỶ THẢ
+  Future<void> _showWithdrawFishDialog(Pond pond, List<FishBatch> batches) async {
+    // Chỉ hiện lô cá đang có cá trong ao này
+    final batchesInPond = batches.where((b) => b.quantityInPond(pond.id) > 0).toList();
+    if (batchesInPond.isEmpty) {
+      _showSnack('Không có lô cá nào trong ao ${pond.code}');
+      return;
+    }
+
+    FishBatch? selectedBatch = batchesInPond.first;
+    final qtyC = TextEditingController();
+    String withdrawType = 'partial'; // 'partial' or 'all'
+
+    final ok = await showDialog<bool>(
+      context: context,
+      builder: (dCtx) => StatefulBuilder(
+        builder: (dCtx, ss) {
+          final qtyInPond = selectedBatch?.quantityInPond(pond.id) ?? 0;
+          final sp = selectedBatch != null ? dp.speciesById(selectedBatch!.speciesId) : null;
+          return AlertDialog(
+            title: Row(children: [
+              const Icon(Icons.undo_rounded, color: Color(0xFFE65100)),
+              const SizedBox(width: 8),
+              Expanded(child: Text('Rút cá khỏi ${pond.code}')),
+            ]),
+            content: SizedBox(
+              width: 500,
+              child: SingleChildScrollView(
+                child: Column(mainAxisSize: MainAxisSize.min, children: [
+                  // Chọn lô cá
+                  DropdownButtonFormField<String>(
+                    initialValue: selectedBatch?.id,
+                    decoration: const InputDecoration(labelText: 'Chọn lô cá', prefixIcon: Icon(Icons.inventory_2)),
+                    items: batchesInPond.map((b) {
+                      final sName = dp.speciesById(b.speciesId)?.name ?? '';
+                      final label = b.name.isNotEmpty ? '${b.name} ($sName)' : sName;
+                      return DropdownMenuItem(value: b.id, child: Text('$label — ${b.quantityInPond(pond.id)} con trong ao'));
+                    }).toList(),
+                    onChanged: (v) => ss(() {
+                      selectedBatch = batchesInPond.where((b) => b.id == v).firstOrNull;
+                      qtyC.text = '';
+                      withdrawType = 'partial';
+                    }),
+                  ),
+                  const SizedBox(height: 16),
+                  if (selectedBatch != null) ...[
+                    Container(
+                      padding: const EdgeInsets.all(12),
+                      decoration: BoxDecoration(color: const Color(0xFFE65100).withAlpha(12), borderRadius: BorderRadius.circular(8)),
+                      child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                        Text('Loài: ${sp?.name ?? '—'}', style: const TextStyle(fontSize: 13)),
+                        Text('Số cá trong ao ${pond.code}: $qtyInPond con', style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w700)),
+                        Text('Tổng lô: ${selectedBatch!.currentQuantity} con (ban đầu: ${selectedBatch!.initialQuantity})', style: const TextStyle(fontSize: 13)),
+                        if (selectedBatch!.pondAllocations.length > 1)
+                          Text('Đang phân bổ ở: ${selectedBatch!.pondIds.map((id) => dp.pondById(id)?.code ?? '?').join(', ')}',
+                              style: const TextStyle(fontSize: 13, color: AppColors.info)),
+                      ]),
+                    ),
+                    const SizedBox(height: 12),
+                    // Loại rút
+                    Row(children: [
+                      Expanded(child: RadioListTile<String>(
+                        title: const Text('Rút một phần', style: TextStyle(fontSize: 13)),
+                        value: 'partial',
+                        groupValue: withdrawType,
+                        onChanged: (v) => ss(() { withdrawType = v!; qtyC.text = ''; }),
+                        dense: true,
+                        contentPadding: EdgeInsets.zero,
+                      )),
+                      Expanded(child: RadioListTile<String>(
+                        title: const Text('Rút toàn bộ', style: TextStyle(fontSize: 13)),
+                        value: 'all',
+                        groupValue: withdrawType,
+                        onChanged: (v) => ss(() { withdrawType = v!; qtyC.text = qtyInPond.toString(); }),
+                        dense: true,
+                        contentPadding: EdgeInsets.zero,
+                      )),
+                    ]),
+                    if (withdrawType == 'partial') ...[
+                      const SizedBox(height: 8),
+                      TextField(
+                        controller: qtyC,
+                        decoration: InputDecoration(
+                          labelText: 'Số lượng rút (tối đa $qtyInPond con)',
+                          prefixIcon: const Icon(Icons.format_list_numbered),
+                        ),
+                        keyboardType: TextInputType.number,
+                      ),
+                    ],
+                    const SizedBox(height: 12),
+                    Container(
+                      padding: const EdgeInsets.all(10),
+                      decoration: BoxDecoration(color: AppColors.warning.withAlpha(15), borderRadius: BorderRadius.circular(8), border: Border.all(color: AppColors.warning.withAlpha(40))),
+                      child: const Row(children: [
+                        Icon(Icons.info_outline, size: 18, color: AppColors.warning),
+                        SizedBox(width: 8),
+                        Expanded(child: Text('Cá rút khỏi ao sẽ trở về trạng thái chưa phân bổ trong lô. Bạn có thể thả lại vào ao khác.', style: TextStyle(fontSize: 12, color: AppColors.textSecondary))),
+                      ]),
+                    ),
+                  ],
+                ]),
+              ),
+            ),
+            actions: [
+              TextButton(onPressed: () => Navigator.pop(dCtx, false), child: const Text('Huỷ')),
+              FilledButton.icon(
+                onPressed: () => Navigator.pop(dCtx, true),
+                icon: const Icon(Icons.undo_rounded),
+                label: const Text('Rút cá'),
+                style: FilledButton.styleFrom(backgroundColor: const Color(0xFFE65100)),
+              ),
+            ],
+          );
+        },
+      ),
+    );
+
+    if (ok == true && selectedBatch != null) {
+      final batch = selectedBatch!;
+      final qtyInPond = batch.quantityInPond(pond.id);
+      final withdrawQty = withdrawType == 'all' ? qtyInPond : (int.tryParse(qtyC.text) ?? 0);
+
+      if (withdrawQty <= 0) {
+        _showSnack('Số lượng phải lớn hơn 0');
+        return;
+      }
+      if (withdrawQty > qtyInPond) {
+        _showSnack('Số lượng vượt quá số cá trong ao ($qtyInPond con)');
+        return;
+      }
+
+      // Xác nhận
+      final confirmed = await showDialog<bool>(
+        context: context,
+        builder: (c) => AlertDialog(
+          title: const Row(children: [Icon(Icons.warning_rounded, color: AppColors.warning), SizedBox(width: 8), Text('Xác nhận rút cá')]),
+          content: Column(mainAxisSize: MainAxisSize.min, crossAxisAlignment: CrossAxisAlignment.start, children: [
+            Text('Rút $withdrawQty con khỏi ao ${pond.code}?'),
+            Text('Lô: ${batch.name.isNotEmpty ? batch.name : dp.speciesById(batch.speciesId)?.name ?? '?'}', style: const TextStyle(fontSize: 13, color: AppColors.textSecondary)),
+            const SizedBox(height: 8),
+            const Text('• Cá sẽ trở về trạng thái chưa phân bổ', style: TextStyle(fontSize: 13, color: AppColors.textSecondary)),
+            if (withdrawQty == qtyInPond)
+              const Text('• Ao sẽ trở về trạng thái Trống nếu không còn lô cá khác', style: TextStyle(fontSize: 13, color: AppColors.textSecondary)),
+          ]),
+          actions: [
+            TextButton(onPressed: () => Navigator.pop(c, false), child: const Text('Huỷ')),
+            FilledButton(onPressed: () => Navigator.pop(c, true), style: FilledButton.styleFrom(backgroundColor: const Color(0xFFE65100)), child: const Text('Xác nhận rút')),
+          ],
+        ),
+      );
+      if (confirmed != true) return;
+
+      // Cập nhật pondAllocations
+      final newAllocs = List<Map<String, dynamic>>.from(batch.pondAllocations);
+      final idx = newAllocs.indexWhere((a) => a['pondId'] == pond.id);
+      if (idx >= 0) {
+        final remaining = ((newAllocs[idx]['quantity'] as num?)?.toInt() ?? 0) - withdrawQty;
+        if (remaining <= 0) {
+          newAllocs.removeAt(idx);
+        } else {
+          newAllocs[idx] = {'pondId': pond.id, 'quantity': remaining};
+        }
+      }
+
+      await dp.update('fishbatches', batch.id, {
+        ...batch.toJson(),
+        'pondAllocations': newAllocs,
+        'pondId': newAllocs.isNotEmpty ? newAllocs.first['pondId'] : '',
+      });
+
+      // Nếu rút hết cá trong ao → kiểm tra có lô khác không, nếu không thì chuyển ao thành inactive
+      if (withdrawQty == qtyInPond) {
+        final otherBatchesInPond = dp.batchesForPond(pond.id).where((b) => b.id != batch.id && b.status == 'active');
+        if (otherBatchesInPond.isEmpty) {
+          await dp.update('ponds', pond.id, {...pond.toJson(), 'status': 'inactive'});
+        }
+      }
+
+      _showSnack('Đã rút $withdrawQty con khỏi ${pond.code}. Cá trở về chưa phân bổ.');
     }
   }
 
@@ -3352,7 +3748,7 @@ class _FarmMapViewState extends State<FarmMapView> {
       final weightPerFishKg = (batch.currentWeight > 0 ? batch.currentWeight : batch.initialWeight) / 1000;
       final totalAmount = sellQty * weightPerFishKg * unitPrice;
 
-      // Create sale order
+      // Create sale order (backend handles fishBatch deduction + stock issue creation via _onSaleCompleted)
       await dp.create('saleorders', {
         'customerId': customerId ?? '',
         'date': DateTime.now().toIso8601String(),
@@ -3363,32 +3759,8 @@ class _FarmMapViewState extends State<FarmMapView> {
         'status': 'completed',
       });
 
-      // Cập nhật pondAllocations và currentQuantity
-      final newAllocs = List<Map<String, dynamic>>.from(batch.pondAllocations);
-      final idx = newAllocs.indexWhere((a) => a['pondId'] == pond.id);
-      if (idx >= 0) {
-        final remaining = ((newAllocs[idx]['quantity'] as num?)?.toInt() ?? 0) - sellQty;
-        if (remaining <= 0) {
-          newAllocs.removeAt(idx);
-        } else {
-          newAllocs[idx] = {'pondId': pond.id, 'quantity': remaining};
-        }
-      }
-      final totalRemaining = batch.currentQuantity - sellQty;
-      await dp.update('fishbatches', batch.id, {
-        ...batch.toJson(),
-        'currentQuantity': totalRemaining,
-        'pondAllocations': newAllocs,
-        'status': totalRemaining <= 0 ? 'harvested' : 'active',
-      });
-
-      // Deactivate pond if no more active fish
-      if (totalRemaining <= 0) {
-        final otherActive = dp.batchesForPond(pond.id).where((b) => b.id != batch.id && b.status == 'active');
-        if (otherActive.isEmpty) {
-          await dp.update('ponds', pond.id, {...pond.toJson(), 'status': 'inactive'});
-        }
-      }
+      // Reload data to get backend-updated fishBatch and products
+      await Future.wait([dp.reload('fishbatches'), dp.reload('products'), dp.reload('stockissues'), dp.reload('saleorders'), dp.reload('ponds')]);
 
       _showSnack('Xuất bán $sellQty con – ${_currFmt.format(totalAmount)}đ');
     }
