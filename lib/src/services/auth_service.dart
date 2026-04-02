@@ -41,6 +41,7 @@ class AuthService {
 
   Future<({User? user, String? error})> signUp({
     required String storeName,
+    String? username,
     String? email,
     String? phone,
     String? address,
@@ -48,6 +49,7 @@ class AuthService {
   }) async {
     final response = await _apiService.post('/auth/register', body: {
       'storeName': storeName,
+      if (username != null && username.isNotEmpty) 'username': username,
       if (email != null && email.isNotEmpty) 'email': email,
       if (phone != null && phone.isNotEmpty) 'phone': phone,
       if (address != null && address.isNotEmpty) 'address': address,
@@ -63,6 +65,14 @@ class AuthService {
     final user = User.fromJson(raw);
     await _secureStorage.write(key: _storageKey, value: jsonEncode(user.toJson()));
     return (user: user, error: null);
+  }
+
+  Future<String> suggestUsername(String storeName) async {
+    final response = await _apiService.get('/auth/suggest-username?storeName=${Uri.encodeComponent(storeName)}');
+    if (response.statusCode == 200 && response.data is Map) {
+      return (response.data['username'] as String?) ?? '';
+    }
+    return '';
   }
 
   Future<String?> forgotPassword({required String email}) async {

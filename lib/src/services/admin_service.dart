@@ -87,6 +87,24 @@ class AdminService {
     return resp.statusCode == 200;
   }
 
+  Future<({Map<String, dynamic>? license, String? error})> updateStoreLicense({
+    required String storeId,
+    String? expiresAt,
+    int? addDays,
+    String? plan,
+  }) async {
+    final resp = await _apiService.put('/sysadmin/stores/$storeId/license', body: {
+      if (expiresAt != null) 'expiresAt': expiresAt,
+      if (addDays != null) 'addDays': addDays,
+      if (plan != null) 'plan': plan,
+    });
+    if (resp.statusCode == 200 && resp.data is Map) {
+      return (license: resp.data['license'] as Map<String, dynamic>?, error: null);
+    }
+    final msg = (resp.data is Map) ? resp.data['message'] as String? : null;
+    return (license: null, error: msg ?? 'Cập nhật thất bại');
+  }
+
   // Licenses
   Future<List<Map<String, dynamic>>> getLicenses() async {
     final resp = await _apiService.get('/sysadmin/licenses');

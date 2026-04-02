@@ -243,7 +243,7 @@ class _MainScreenState extends State<MainScreen> with TickerProviderStateMixin {
             // Version
             Padding(
               padding: const EdgeInsets.all(AppSpace.lg),
-              child: Text('v1.1.1', style: AppText.tiny.copyWith(color: Colors.white.withAlpha(80))),
+              child: Text('v1.2.0', style: AppText.tiny.copyWith(color: Colors.white.withAlpha(80))),
             ),
           ],
         ),
@@ -358,7 +358,7 @@ class _MainScreenState extends State<MainScreen> with TickerProviderStateMixin {
               const Divider(color: Colors.white12),
               Padding(
                 padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 4),
-                child: Text('v1.1.1', style: AppText.tiny.copyWith(color: Colors.white38)),
+                child: Text('v1.2.0', style: AppText.tiny.copyWith(color: Colors.white38)),
               ),
               Expanded(
                 child: ListView.builder(

@@ -151,7 +151,7 @@ class _LoginScreenState extends State<LoginScreen>
                             crossAxisAlignment: CrossAxisAlignment.start,
                             children: [
                               const Text(
-                                'Email hoặc số điện thoại',
+                                'Tên đăng nhập / Email / SĐT',
                                 style: TextStyle(
                                   fontSize: 13,
                                   fontWeight: FontWeight.w600,
@@ -162,7 +162,7 @@ class _LoginScreenState extends State<LoginScreen>
                               TextFormField(
                                 controller: _emailController,
                                 decoration: InputDecoration(
-                                  hintText: 'email@aqua.vn hoặc 0901234567',
+                                  hintText: 'Email, SĐT hoặc tên đăng nhập',
                                   prefixIcon: const Icon(
                                     Icons.person_outline,
                                     size: 20,
@@ -173,7 +173,7 @@ class _LoginScreenState extends State<LoginScreen>
                                 keyboardType: TextInputType.emailAddress,
                                 validator: (value) {
                                   if (value == null || value.isEmpty) {
-                                    return 'Vui lòng nhập email hoặc số điện thoại';
+                                    return 'Vui lòng nhập tên đăng nhập, email hoặc SĐT';
                                   }
                                   return null;
                                 },

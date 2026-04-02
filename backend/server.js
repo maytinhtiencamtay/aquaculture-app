@@ -172,6 +172,25 @@ const db = {
 
 function genId() { return crypto.randomUUID(); }
 
+// ── Vietnamese text normalization for username generation ──
+function normalizeVN(str) {
+  return str.normalize('NFD').replace(/[\u0300-\u036f]/g, '')
+    .replace(/đ/g, 'd').replace(/Đ/g, 'd')
+    .toLowerCase().replace(/[^a-z0-9]/g, '');
+}
+
+function generateUsername(storeName) {
+  const base = normalizeVN(storeName).substring(0, 20) || 'store';
+  // Check if username exists
+  const exists = (name) => db.employees.find(u => u.username === name);
+  if (!exists(base)) return base;
+  for (let i = 1; i <= 99; i++) {
+    const candidate = `${base}${i}`;
+    if (!exists(candidate)) return candidate;
+  }
+  return `${base}${Date.now() % 10000}`;
+}
+
 // ── Auth routes ──
 const bcrypt = require('bcryptjs');
 const jwt = require('jsonwebtoken');
@@ -196,8 +215,15 @@ function authMiddleware(req, res, next) {
   }
 }
 
+app.get('/api/auth/suggest-username', (req, res) => {
+  const { storeName } = req.query;
+  if (!storeName) return res.json({ username: '' });
+  const username = generateUsername(storeName);
+  res.json({ username });
+});
+
 app.post('/api/auth/register', async (req, res) => {
-  const { storeName, email, phone, address, password } = req.body;
+  const { storeName, username, email, phone, address, password } = req.body;
   if (!storeName || !password) return res.status(400).json({ message: 'Vui lòng nhập đầy đủ thông tin' });
   if (!email && !phone) return res.status(400).json({ message: 'Vui lòng nhập email hoặc số điện thoại' });
   if (email && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) return res.status(400).json({ message: 'Email không hợp lệ' });
@@ -206,24 +232,48 @@ app.post('/api/auth/register', async (req, res) => {
   // Check uniqueness across ALL employees (not just those with hasAccount)
   if (email && db.employees.find(u => u.email === email && u.email !== '')) return res.status(409).json({ message: 'Email đã được đăng ký' });
   if (phone && db.employees.find(u => u.phone === phone && u.phone !== '')) return res.status(409).json({ message: 'Số điện thoại đã được đăng ký' });
+  // Validate username uniqueness
+  const finalUsername = username ? username.trim().toLowerCase().replace(/[^a-z0-9]/g, '') : generateUsername(storeName);
+  if (finalUsername && db.employees.find(u => u.username === finalUsername)) {
+    return res.status(409).json({ message: 'Tên đăng nhập đã được sử dụng' });
+  }
   const hashed = await bcrypt.hash(password, 10);
 
   // Auto-create a store (branch) for the new owner
   const storeId = genId();
+  const now = new Date();
   const store = {
     _id: storeId,
     name: storeName,
     address: address || '',
     contact: phone || email || '',
     manager: storeName,
-    createdAt: new Date().toISOString(),
+    storeId: storeId,
+    createdAt: now.toISOString(),
   };
   db.branches.push(store);
+
+  // Auto-create 30-day trial license
+  const trialExpiresAt = new Date(now.getTime() + 30 * 24 * 60 * 60 * 1000);
+  const trialKey = 'AQ-TRIAL-' + crypto.randomUUID().replace(/-/g, '').substring(0, 10).toUpperCase();
+  const trialLicense = {
+    _id: genId(),
+    key: trialKey,
+    storeId,
+    plan: 'trial',
+    durationDays: 30,
+    status: 'active',
+    note: 'Dùng thử 30 ngày',
+    createdAt: now.toISOString(),
+    expiresAt: trialExpiresAt.toISOString(),
+  };
+  db.licenses.push(trialLicense);
 
   const user = {
     _id: genId(),
     name: storeName,
     storeName,
+    username: finalUsername,
     email: email || '',
     phone: phone || '',
     address: address || '',
@@ -232,24 +282,34 @@ app.post('/api/auth/register', async (req, res) => {
     storeId,
     hasAccount: true,
     permissions: [],
-    createdAt: new Date().toISOString(),
+    createdAt: now.toISOString(),
   };
   db.employees.push(user);
+  saveDb();
 
   const token = jwt.sign({ id: user._id, role: user.role }, JWT_SECRET, { expiresIn: '7d' });
-  res.status(201).json({ id: user._id, email: user.email, displayName: user.name, storeName: user.storeName, phone: user.phone, address: user.address, storeId, token, role: 'owner', permissions: [] });
+  res.status(201).json({ id: user._id, email: user.email, displayName: user.name, storeName: user.storeName, username: user.username, phone: user.phone, address: user.address, storeId, token, role: 'owner', permissions: [], trialExpiresAt: trialExpiresAt.toISOString() });
 });
 
 app.post('/api/auth/login', async (req, res) => {
   const { email, password } = req.body;
-  if (!email || !password) return res.status(400).json({ message: 'Vui lòng nhập email/SĐT và mật khẩu' });
-  const user = db.employees.find(u => (u.email === email || u.phone === email) && u.hasAccount !== false);
+  if (!email || !password) return res.status(400).json({ message: 'Vui lòng nhập email/SĐT/tên đăng nhập và mật khẩu' });
+  const user = db.employees.find(u => (u.email === email || u.phone === email || u.username === email) && u.hasAccount !== false);
   if (!user) return res.status(404).json({ message: 'Tài khoản không tồn tại' });
   if (!user.password) return res.status(401).json({ message: 'Tài khoản chưa được thiết lập mật khẩu' });
+  // Check store status
+  const storeBranch = db.branches.find(b => (b.storeId || b._id) === user.storeId);
+  if (storeBranch && storeBranch.status === 'suspended') {
+    return res.status(403).json({ message: 'Cửa hàng đã bị tạm ngưng. Vui lòng liên hệ quản trị viên.' });
+  }
   const valid = await bcrypt.compare(password, user.password);
   if (!valid) return res.status(401).json({ message: 'Mật khẩu không đúng' });
+  // Find active license for trial info
+  const license = db.licenses.find(l => l.storeId === user.storeId && l.status === 'active');
+  const trialExpiresAt = license ? license.expiresAt : null;
+  const trialExpired = trialExpiresAt ? new Date(trialExpiresAt) <= new Date() : false;
   const token = jwt.sign({ id: user._id, role: user.role }, JWT_SECRET, { expiresIn: '7d' });
-  res.json({ id: user._id, email: user.email, displayName: user.name, storeName: user.storeName, phone: user.phone, address: user.address, storeId: user.storeId || '', token, role: user.role || 'owner', permissions: user.permissions || [] });
+  res.json({ id: user._id, email: user.email, displayName: user.name, storeName: user.storeName, username: user.username || '', phone: user.phone, address: user.address, storeId: user.storeId || '', token, role: user.role || 'owner', permissions: user.permissions || [], trialExpiresAt, trialExpired, licensePlan: license?.plan || null });
 });
 
 app.post('/api/auth/forgot-password', async (req, res) => {
@@ -2530,19 +2590,25 @@ app.get('/api/sysadmin/dashboard', sysadminMiddleware, (req, res) => {
   const totalBatches = db.fishbatches.length;
   const activeLicenses = db.licenses.filter(l => l.status === 'active' && new Date(l.expiresAt) > new Date()).length;
   const expiredLicenses = db.licenses.filter(l => l.status === 'active' && new Date(l.expiresAt) <= new Date()).length;
+  const trialStores = db.licenses.filter(l => l.plan === 'trial' && l.status === 'active').length;
 
   // Recent stores (last 10)
   const recentStores = uniqueStores
     .sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt))
     .slice(0, 10)
-    .map(s => ({
-      _id: s.storeId,
-      name: s.name,
-      ownerEmail: s.ownerEmail,
-      ownerName: s.ownerName,
-      createdAt: s.createdAt,
-      status: s.status || 'active',
-    }));
+    .map(s => {
+      const lic = db.licenses.find(l => l.storeId === s.storeId && l.status === 'active');
+      return {
+        _id: s.storeId,
+        name: s.name,
+        ownerEmail: s.ownerEmail,
+        ownerName: s.ownerName,
+        createdAt: s.createdAt,
+        status: s.status || 'active',
+        licensePlan: lic?.plan || null,
+        licenseExpiresAt: lic?.expiresAt || null,
+      };
+    });
 
   res.json({
     totalStores,
@@ -2551,11 +2617,12 @@ app.get('/api/sysadmin/dashboard', sysadminMiddleware, (req, res) => {
     totalBatches,
     activeLicenses,
     expiredLicenses,
+    trialStores,
     recentStores,
   });
 });
 
-// List all stores
+// List all stores (with lastActivity + trial info)
 app.get('/api/sysadmin/stores', sysadminMiddleware, (req, res) => {
   const storeMap = new Map();
   db.branches.forEach(b => {
@@ -2564,29 +2631,49 @@ app.get('/api/sysadmin/stores', sysadminMiddleware, (req, res) => {
   });
 
   const stores = [...storeMap.values()].map(store => {
-    const storeEmployees = db.employees.filter(e => e.storeId === store.storeId);
+    const sid = store.storeId;
+    const storeEmployees = db.employees.filter(e => e.storeId === sid);
     const owner = storeEmployees.find(e => e.role === 'owner');
-    const branches = db.branches.filter(b => (b.storeId || b._id) === store.storeId);
-    const ponds = db.ponds.filter(p => p.storeId === store.storeId);
-    const license = db.licenses.find(l => l.storeId === store.storeId && l.status === 'active');
+    const branches = db.branches.filter(b => (b.storeId || b._id) === sid);
+    const ponds = db.ponds.filter(p => p.storeId === sid);
+    const license = db.licenses.find(l => l.storeId === sid && l.status === 'active');
+
+    // Calculate last activity: latest updatedAt/createdAt across store data
+    const allDates = [];
+    const collections = ['fishbatches', 'ponds', 'products', 'purchaseorders', 'saleorders', 'stockissues', 'stockreceipts', 'sizemeasurements', 'tasks', 'feedinglogs'];
+    for (const col of collections) {
+      if (!db[col]) continue;
+      for (const item of db[col]) {
+        if (item.storeId !== sid) continue;
+        if (item.updatedAt) allDates.push(new Date(item.updatedAt));
+        else if (item.createdAt) allDates.push(new Date(item.createdAt));
+      }
+    }
+    const lastActivity = allDates.length > 0 ? new Date(Math.max(...allDates)).toISOString() : null;
+    const daysSinceActivity = lastActivity ? Math.floor((Date.now() - new Date(lastActivity).getTime()) / (24 * 60 * 60 * 1000)) : null;
 
     return {
-      _id: store.storeId,
+      _id: sid,
       name: store.name,
       address: store.address || '',
       contact: store.contact || '',
       ownerName: owner?.name || '',
       ownerEmail: owner?.email || '',
       ownerPhone: owner?.phone || '',
+      username: owner?.username || '',
       employeeCount: storeEmployees.length,
       branchCount: branches.length,
       pondCount: ponds.length,
       status: store.status || 'active',
       license: license ? {
+        _id: license._id,
         key: license.key,
         plan: license.plan,
         expiresAt: license.expiresAt,
+        durationDays: license.durationDays,
       } : null,
+      lastActivity,
+      daysSinceActivity,
       createdAt: store.createdAt,
     };
   });
@@ -2640,6 +2727,48 @@ app.put('/api/sysadmin/stores/:id/status', sysadminMiddleware, (req, res) => {
   branches.forEach(b => b.status = status);
   saveDb();
   res.json({ message: `Đã ${status === 'active' ? 'kích hoạt' : 'tạm ngưng'} cửa hàng`, status });
+});
+
+// Update store license expiry (admin adjust trial/usage days)
+app.put('/api/sysadmin/stores/:id/license', sysadminMiddleware, (req, res) => {
+  const storeId = req.params.id;
+  const { expiresAt, addDays, plan } = req.body;
+  const branches = db.branches.filter(b => (b.storeId || b._id) === storeId);
+  if (branches.length === 0) return res.status(404).json({ message: 'Cửa hàng không tồn tại' });
+
+  let license = db.licenses.find(l => l.storeId === storeId && l.status === 'active');
+  if (!license) {
+    // Create new license if none exists
+    const now = new Date();
+    const days = addDays || 30;
+    const exp = expiresAt ? new Date(expiresAt) : new Date(now.getTime() + days * 24 * 60 * 60 * 1000);
+    license = {
+      _id: genId(),
+      key: 'AQ-' + crypto.randomUUID().replace(/-/g, '').substring(0, 16).toUpperCase(),
+      storeId,
+      plan: plan || 'trial',
+      durationDays: days,
+      status: 'active',
+      note: 'Tạo bởi admin',
+      createdAt: now.toISOString(),
+      expiresAt: exp.toISOString(),
+    };
+    db.licenses.push(license);
+  } else {
+    // Update existing license
+    if (expiresAt) {
+      license.expiresAt = new Date(expiresAt).toISOString();
+      license.durationDays = Math.ceil((new Date(expiresAt) - new Date(license.createdAt)) / (24 * 60 * 60 * 1000));
+    } else if (addDays) {
+      const current = new Date(license.expiresAt);
+      const newExp = new Date(current.getTime() + parseInt(addDays) * 24 * 60 * 60 * 1000);
+      license.expiresAt = newExp.toISOString();
+      license.durationDays = (license.durationDays || 0) + parseInt(addDays);
+    }
+    if (plan) license.plan = plan;
+  }
+  saveDb();
+  res.json({ message: 'Đã cập nhật license', license });
 });
 
 // ── License Management ──

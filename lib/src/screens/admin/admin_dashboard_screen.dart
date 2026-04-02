@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:intl/intl.dart';
 
 import '../../routes.dart';
 import '../../services/admin_service.dart';
@@ -174,6 +175,7 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
               runSpacing: 16,
               children: [
                 _kpiCard('Cửa hàng', '${_data!['totalStores'] ?? 0}', Icons.store, AppColors.kpiPrimary),
+                _kpiCard('Dùng thử', '${_data!['trialStores'] ?? 0}', Icons.card_giftcard, AppColors.orange),
                 _kpiCard('Nhân viên', '${_data!['totalEmployees'] ?? 0}', Icons.people, AppColors.kpiSuccess),
                 _kpiCard('Ao nuôi', '${_data!['totalPonds'] ?? 0}', Icons.water, AppColors.kpiWarning),
                 _kpiCard('Lô cá', '${_data!['totalBatches'] ?? 0}', Icons.set_meal, AppColors.kpiPurple),
@@ -195,13 +197,31 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
                       separatorBuilder: (_, __) => const Divider(height: 1),
                       itemBuilder: (context, i) {
                         final s = recentStores[i] as Map<String, dynamic>;
+                        final plan = s['licensePlan'] as String?;
+                        final expiresAt = s['licenseExpiresAt'] != null ? DateTime.tryParse(s['licenseExpiresAt'].toString()) : null;
+                        final isExpired = expiresAt != null && expiresAt.isBefore(DateTime.now());
                         return ListTile(
                           leading: CircleAvatar(
                             backgroundColor: AppColors.primary.withValues(alpha: 0.1),
                             child: const Icon(Icons.store, color: AppColors.primary, size: 20),
                           ),
-                          title: Text(s['name'] ?? '', style: const TextStyle(fontWeight: FontWeight.w600)),
-                          subtitle: Text(s['ownerEmail'] ?? '', style: const TextStyle(fontSize: 12)),
+                          title: Row(
+                            children: [
+                              Flexible(child: Text(s['name'] ?? '', style: const TextStyle(fontWeight: FontWeight.w600))),
+                              if (plan == 'trial') ...[
+                                const SizedBox(width: 6),
+                                Container(
+                                  padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 1),
+                                  decoration: BoxDecoration(color: AppColors.orange.withValues(alpha: 0.1), borderRadius: BorderRadius.circular(8)),
+                                  child: const Text('Dùng thử', style: TextStyle(fontSize: 10, color: AppColors.orange, fontWeight: FontWeight.w600)),
+                                ),
+                              ],
+                            ],
+                          ),
+                          subtitle: Text(
+                            '${s['ownerEmail'] ?? ''}${expiresAt != null ? ' • HH: ${DateFormat('dd/MM/yyyy').format(expiresAt)}' : ''}',
+                            style: TextStyle(fontSize: 12, color: isExpired ? AppColors.error : null),
+                          ),
                           trailing: _statusBadge(s['status'] ?? 'active'),
                         );
                       },
@@ -343,6 +363,7 @@ class _StoresTabState extends State<_StoresTab> {
                           store: s,
                           onToggleStatus: () => _toggleStatus(s),
                           onViewDetail: () => _showDetail(s['_id']),
+                          onEditLicense: () => _showEditLicense(s),
                         );
                       },
                     ),
@@ -362,19 +383,173 @@ class _StoresTabState extends State<_StoresTab> {
       builder: (_) => _StoreDetailDialog(store: detail),
     );
   }
+
+  void _showEditLicense(Map<String, dynamic> store) {
+    final license = store['license'] as Map<String, dynamic>?;
+    final currentExpiry = license?['expiresAt'] != null ? DateTime.tryParse(license!['expiresAt'].toString()) : null;
+    final currentPlan = license?['plan'] as String? ?? 'trial';
+
+    DateTime selectedDate = currentExpiry ?? DateTime.now().add(const Duration(days: 30));
+    String selectedPlan = currentPlan;
+    final addDaysCtrl = TextEditingController();
+
+    showDialog(
+      context: context,
+      builder: (ctx) => StatefulBuilder(
+        builder: (ctx, setDState) => AlertDialog(
+          title: Row(
+            children: [
+              const Icon(Icons.edit_calendar, color: AppColors.info),
+              const SizedBox(width: 8),
+              Expanded(child: Text('Chỉnh ngày sử dụng — ${store['name']}', style: const TextStyle(fontSize: 16))),
+            ],
+          ),
+          content: SizedBox(
+            width: 400,
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                if (currentExpiry != null)
+                  Padding(
+                    padding: const EdgeInsets.only(bottom: 12),
+                    child: Text(
+                      'Hiện tại: $currentPlan — HH ${DateFormat('dd/MM/yyyy').format(currentExpiry)}'
+                          '${currentExpiry.isBefore(DateTime.now()) ? ' (ĐÃ HẾT HẠN)' : ' (còn ${currentExpiry.difference(DateTime.now()).inDays} ngày)'}',
+                      style: TextStyle(
+                        fontSize: 13,
+                        color: currentExpiry.isBefore(DateTime.now()) ? AppColors.error : AppColors.textSecondary,
+                        fontWeight: FontWeight.w500,
+                      ),
+                    ),
+                  ),
+                DropdownButtonFormField<String>(
+                  decoration: const InputDecoration(labelText: 'Gói dịch vụ', isDense: true),
+                  value: selectedPlan,
+                  items: const [
+                    DropdownMenuItem(value: 'trial', child: Text('Trial (Dùng thử)')),
+                    DropdownMenuItem(value: 'basic', child: Text('Basic (Cơ bản)')),
+                    DropdownMenuItem(value: 'pro', child: Text('Pro (Chuyên nghiệp)')),
+                    DropdownMenuItem(value: 'enterprise', child: Text('Enterprise (Doanh nghiệp)')),
+                  ],
+                  onChanged: (v) => setDState(() => selectedPlan = v ?? 'trial'),
+                ),
+                const SizedBox(height: 16),
+                const Text('Chọn ngày hết hạn:', style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600)),
+                const SizedBox(height: 8),
+                InkWell(
+                  onTap: () async {
+                    final picked = await showDatePicker(
+                      context: ctx,
+                      initialDate: selectedDate,
+                      firstDate: DateTime.now().subtract(const Duration(days: 365)),
+                      lastDate: DateTime.now().add(const Duration(days: 3650)),
+                    );
+                    if (picked != null) setDState(() => selectedDate = picked);
+                  },
+                  child: Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
+                    decoration: BoxDecoration(
+                      border: Border.all(color: AppColors.border),
+                      borderRadius: BorderRadius.circular(8),
+                    ),
+                    child: Row(
+                      children: [
+                        const Icon(Icons.calendar_today, size: 18, color: AppColors.primary),
+                        const SizedBox(width: 10),
+                        Text(DateFormat('dd/MM/yyyy').format(selectedDate), style: const TextStyle(fontSize: 15, fontWeight: FontWeight.w600)),
+                        const Spacer(),
+                        const Icon(Icons.edit, size: 16, color: AppColors.textHint),
+                      ],
+                    ),
+                  ),
+                ),
+                const SizedBox(height: 16),
+                const Text('Hoặc thêm ngày:', style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600)),
+                const SizedBox(height: 8),
+                Row(
+                  children: [
+                    for (final d in [7, 15, 30, 90, 365])
+                      Padding(
+                        padding: const EdgeInsets.only(right: 6),
+                        child: ActionChip(
+                          label: Text('+${d}d', style: const TextStyle(fontSize: 12)),
+                          onPressed: () async {
+                            final result = await widget.adminService.updateStoreLicense(
+                              storeId: store['_id'],
+                              addDays: d,
+                              plan: selectedPlan,
+                            );
+                            if (ctx.mounted) Navigator.pop(ctx);
+                            if (result.error == null) {
+                              _load();
+                              if (mounted) {
+                                ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+                                  content: Text('Đã thêm $d ngày cho ${store['name']}'),
+                                  backgroundColor: AppColors.success,
+                                ));
+                              }
+                            }
+                          },
+                        ),
+                      ),
+                  ],
+                ),
+              ],
+            ),
+          ),
+          actions: [
+            TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('Hủy')),
+            FilledButton(
+              onPressed: () async {
+                final result = await widget.adminService.updateStoreLicense(
+                  storeId: store['_id'],
+                  expiresAt: selectedDate.toIso8601String(),
+                  plan: selectedPlan,
+                );
+                if (ctx.mounted) Navigator.pop(ctx);
+                if (result.error == null) {
+                  _load();
+                  if (mounted) {
+                    ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+                      content: Text('Đã cập nhật license cho ${store['name']}'),
+                      backgroundColor: AppColors.success,
+                    ));
+                  }
+                } else if (mounted) {
+                  ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+                    content: Text(result.error ?? 'Lỗi'),
+                    backgroundColor: AppColors.error,
+                  ));
+                }
+              },
+              child: const Text('Lưu'),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
 }
 
 class _StoreListItem extends StatelessWidget {
   final Map<String, dynamic> store;
   final VoidCallback onToggleStatus;
   final VoidCallback onViewDetail;
+  final VoidCallback? onEditLicense;
 
-  const _StoreListItem({required this.store, required this.onToggleStatus, required this.onViewDetail});
+  const _StoreListItem({required this.store, required this.onToggleStatus, required this.onViewDetail, this.onEditLicense});
 
   @override
   Widget build(BuildContext context) {
     final isActive = store['status'] == 'active';
     final license = store['license'] as Map<String, dynamic>?;
+    final lastActivity = store['lastActivity'] != null ? DateTime.tryParse(store['lastActivity'].toString()) : null;
+    final daysSince = store['daysSinceActivity'] as int?;
+    final plan = license?['plan'] as String?;
+    final expiresAt = license?['expiresAt'] != null ? DateTime.tryParse(license!['expiresAt'].toString()) : null;
+    final isExpired = expiresAt != null && expiresAt.isBefore(DateTime.now());
+    final daysLeft = expiresAt != null ? expiresAt.difference(DateTime.now()).inDays : null;
 
     return ListTile(
       contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
@@ -397,24 +572,50 @@ class _StoreListItem extends StatelessWidget {
               style: TextStyle(color: isActive ? AppColors.success : AppColors.error, fontSize: 11, fontWeight: FontWeight.w600),
             ),
           ),
+          if (plan == 'trial') ...[
+            const SizedBox(width: 4),
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+              decoration: BoxDecoration(color: AppColors.orange.withValues(alpha: 0.1), borderRadius: BorderRadius.circular(10)),
+              child: const Text('Dùng thử', style: TextStyle(fontSize: 10, color: AppColors.orange, fontWeight: FontWeight.w600)),
+            ),
+          ],
         ],
       ),
       subtitle: Padding(
         padding: const EdgeInsets.only(top: 4),
         child: Wrap(
-          spacing: 16,
+          spacing: 12,
+          runSpacing: 4,
           children: [
             Text('${store['ownerEmail'] ?? ''}', style: const TextStyle(fontSize: 12)),
+            if (store['username'] != null && store['username'].toString().isNotEmpty)
+              Text('@${store['username']}', style: const TextStyle(fontSize: 12, color: AppColors.primary, fontWeight: FontWeight.w500)),
             Text('NV: ${store['employeeCount'] ?? 0}', style: const TextStyle(fontSize: 12)),
             Text('Ao: ${store['pondCount'] ?? 0}', style: const TextStyle(fontSize: 12)),
             if (license != null)
-              Text('${license['plan']} → ${_formatDate(license['expiresAt'])}', style: const TextStyle(fontSize: 12, color: AppColors.info)),
+              Text(
+                '${plan ?? ''} → ${daysLeft != null ? (isExpired ? 'Hết hạn' : 'Còn $daysLeft ngày') : ''}',
+                style: TextStyle(fontSize: 12, color: isExpired ? AppColors.error : AppColors.info, fontWeight: FontWeight.w500),
+              ),
+            if (daysSince != null)
+              Text(
+                daysSince == 0 ? 'HĐ: Hôm nay' : 'HĐ: ${daysSince}d trước',
+                style: TextStyle(fontSize: 12, color: daysSince > 7 ? AppColors.textHint : AppColors.success, fontWeight: FontWeight.w500),
+              )
+            else
+              const Text('HĐ: Chưa có', style: TextStyle(fontSize: 12, color: AppColors.textHint)),
           ],
         ),
       ),
       trailing: Row(
         mainAxisSize: MainAxisSize.min,
         children: [
+          IconButton(
+            icon: const Icon(Icons.edit_calendar, size: 20, color: AppColors.info),
+            onPressed: onEditLicense,
+            tooltip: 'Chỉnh ngày sử dụng',
+          ),
           IconButton(
             icon: const Icon(Icons.info_outline, size: 20),
             onPressed: onViewDetail,
@@ -428,13 +629,6 @@ class _StoreListItem extends StatelessWidget {
         ],
       ),
     );
-  }
-
-  String _formatDate(dynamic d) {
-    if (d == null) return '';
-    final dt = DateTime.tryParse(d.toString());
-    if (dt == null) return '';
-    return '${dt.day}/${dt.month}/${dt.year}';
   }
 }
 

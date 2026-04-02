@@ -50,6 +50,7 @@ class AuthProvider extends ChangeNotifier {
 
   Future<bool> signUp({
     required String storeName,
+    String? username,
     String? email,
     String? phone,
     String? address,
@@ -61,6 +62,7 @@ class AuthProvider extends ChangeNotifier {
     try {
       final result = await _authService.signUp(
         storeName: storeName,
+        username: username,
         email: email,
         phone: phone,
         address: address,

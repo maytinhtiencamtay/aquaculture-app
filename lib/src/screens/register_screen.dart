@@ -1,8 +1,10 @@
+import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
 import '../providers/auth_provider.dart';
 import '../routes.dart';
+import '../services/auth_service.dart';
 import '../theme/app_theme.dart';
 
 class RegisterScreen extends StatefulWidget {
@@ -16,6 +18,7 @@ class _RegisterScreenState extends State<RegisterScreen>
     with SingleTickerProviderStateMixin {
   final _formKey = GlobalKey<FormState>();
   final _storeNameCtrl = TextEditingController();
+  final _usernameCtrl = TextEditingController();
   final _emailCtrl = TextEditingController();
   final _phoneCtrl = TextEditingController();
   final _addressCtrl = TextEditingController();
@@ -24,6 +27,9 @@ class _RegisterScreenState extends State<RegisterScreen>
   bool _obscurePassword = true;
   bool _obscureConfirm = true;
   bool _usePhone = false;
+  String _suggestedUsername = '';
+  Timer? _debounce;
+  final _authService = AuthService();
 
   late final AnimationController _animCtrl;
   late final Animation<double> _fadeAnim;
@@ -42,12 +48,35 @@ class _RegisterScreenState extends State<RegisterScreen>
       end: Offset.zero,
     ).animate(CurvedAnimation(parent: _animCtrl, curve: Curves.easeOutCubic));
     _animCtrl.forward();
+    _storeNameCtrl.addListener(_onStoreNameChanged);
+  }
+
+  void _onStoreNameChanged() {
+    _debounce?.cancel();
+    final name = _storeNameCtrl.text.trim();
+    if (name.length < 2) {
+      setState(() => _suggestedUsername = '');
+      return;
+    }
+    _debounce = Timer(const Duration(milliseconds: 500), () async {
+      final suggested = await _authService.suggestUsername(name);
+      if (mounted && _storeNameCtrl.text.trim() == name) {
+        setState(() {
+          _suggestedUsername = suggested;
+          if (_usernameCtrl.text.isEmpty || _usernameCtrl.text == _suggestedUsername) {
+            _usernameCtrl.text = suggested;
+          }
+        });
+      }
+    });
   }
 
   @override
   void dispose() {
+    _debounce?.cancel();
     _animCtrl.dispose();
     _storeNameCtrl.dispose();
+    _usernameCtrl.dispose();
     _emailCtrl.dispose();
     _phoneCtrl.dispose();
     _addressCtrl.dispose();
@@ -62,6 +91,7 @@ class _RegisterScreenState extends State<RegisterScreen>
     final auth = context.read<AuthProvider>();
     final success = await auth.signUp(
       storeName: _storeNameCtrl.text.trim(),
+      username: _usernameCtrl.text.trim().isEmpty ? null : _usernameCtrl.text.trim(),
       email: _emailCtrl.text.trim().isEmpty ? null : _emailCtrl.text.trim(),
       phone: _phoneCtrl.text.trim().isEmpty ? null : _phoneCtrl.text.trim(),
       address: _addressCtrl.text.trim().isEmpty ? null : _addressCtrl.text.trim(),
@@ -147,7 +177,7 @@ class _RegisterScreenState extends State<RegisterScreen>
                         ),
                         const SizedBox(height: 6),
                         const Text(
-                          'Tạo tài khoản để quản lý nuôi trồng thủy sản',
+                          'Tạo tài khoản dùng thử miễn phí 30 ngày',
                           style: TextStyle(fontSize: 14, color: AppColors.textSecondary),
                           textAlign: TextAlign.center,
                         ),
@@ -228,6 +258,41 @@ class _RegisterScreenState extends State<RegisterScreen>
                                   return null;
                                 },
                               ),
+                              const SizedBox(height: 12),
+
+                              // Suggested username
+                              _buildLabel('Tên đăng nhập'),
+                              const SizedBox(height: 6),
+                              TextFormField(
+                                controller: _usernameCtrl,
+                                decoration: InputDecoration(
+                                  hintText: 'Tên đăng nhập cửa hàng',
+                                  prefixIcon: const Icon(Icons.alternate_email, size: 20),
+                                  filled: true,
+                                  fillColor: AppColors.surfaceVariant,
+                                  helperText: _suggestedUsername.isNotEmpty ? 'Gợi ý: $_suggestedUsername' : null,
+                                  helperStyle: const TextStyle(color: AppColors.primary, fontSize: 12),
+                                  suffixIcon: _suggestedUsername.isNotEmpty && _usernameCtrl.text != _suggestedUsername
+                                      ? IconButton(
+                                          icon: const Icon(Icons.auto_fix_high, size: 18, color: AppColors.primary),
+                                          onPressed: () => setState(() => _usernameCtrl.text = _suggestedUsername),
+                                          tooltip: 'Dùng gợi ý',
+                                        )
+                                      : null,
+                                ),
+                                validator: (v) {
+                                  if (v != null && v.isNotEmpty && v.trim().length < 3) return 'Tên đăng nhập quá ngắn';
+                                  return null;
+                                },
+                              ),
+                              if (_suggestedUsername.isNotEmpty)
+                                Padding(
+                                  padding: const EdgeInsets.only(top: 4),
+                                  child: Text(
+                                    'Dùng tên đăng nhập hoặc email/SĐT để đăng nhập',
+                                    style: TextStyle(fontSize: 11, color: AppColors.textHint),
+                                  ),
+                                ),
                               const SizedBox(height: 16),
 
                               // Email or phone depending on toggle
@@ -341,6 +406,29 @@ class _RegisterScreenState extends State<RegisterScreen>
                                 },
                               ),
                               const SizedBox(height: 24),
+
+                              // Trial info banner
+                              Container(
+                                padding: const EdgeInsets.all(12),
+                                decoration: BoxDecoration(
+                                  color: AppColors.info.withAlpha(15),
+                                  borderRadius: BorderRadius.circular(10),
+                                  border: Border.all(color: AppColors.info.withAlpha(40)),
+                                ),
+                                child: const Row(
+                                  children: [
+                                    Icon(Icons.card_giftcard, color: AppColors.info, size: 20),
+                                    SizedBox(width: 10),
+                                    Expanded(
+                                      child: Text(
+                                        'Đăng ký miễn phí, dùng thử 30 ngày đầy đủ tính năng!',
+                                        style: TextStyle(fontSize: 13, color: AppColors.info, fontWeight: FontWeight.w500),
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                              ),
+                              const SizedBox(height: 16),
 
                               // Submit button
                               SizedBox(
