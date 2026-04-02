@@ -502,6 +502,17 @@ function crudRoutes(resource) {
     if (db[resource][idx].storeId && req.user.storeId && db[resource][idx].storeId !== req.user.storeId) {
       return res.status(403).json({ message: 'Không có quyền chỉnh sửa' });
     }
+    // Validate fishbatch pondAllocations — prevent over-allocation
+    if (resource === 'fishbatches' && Array.isArray(req.body.pondAllocations)) {
+      const batch = db[resource][idx];
+      const currentQty = batch.currentQuantity || batch.initialQuantity || 0;
+      const totalAlloc = req.body.pondAllocations.reduce((s, a) => s + (a.quantity || 0), 0);
+      if (totalAlloc > currentQty) {
+        return res.status(400).json({
+          message: `Tổng phân bổ (${totalAlloc}) vượt quá số cá hiện có (${currentQty} con)`,
+        });
+      }
+    }
     // Strip protected fields from body
     const { _id, createdAt, ...safeBody } = req.body;
     db[resource][idx] = { ...db[resource][idx], ...safeBody, updatedAt: new Date().toISOString() };

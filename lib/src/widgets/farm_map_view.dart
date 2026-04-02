@@ -2268,9 +2268,29 @@ class _FarmMapViewState extends State<FarmMapView> {
                         labelText: 'Số lượng thả (tối đa $avail con)',
                         prefixIcon: const Icon(Icons.format_list_numbered),
                         helperText: 'Còn $avail con chưa phân bổ',
+                        errorText: () {
+                          final v = int.tryParse(qtyC.text);
+                          if (qtyC.text.isNotEmpty && (v == null || v <= 0)) return 'Số lượng không hợp lệ';
+                          if (v != null && v > avail) return 'Vượt quá số cá chưa phân bổ ($avail con)!';
+                          return null;
+                        }(),
+                        errorStyle: const TextStyle(fontSize: 12, fontWeight: FontWeight.w600),
                       ),
                       keyboardType: TextInputType.number,
+                      onChanged: (_) => ss(() {}),
                     ),
+                    if (qtyC.text.isNotEmpty && (int.tryParse(qtyC.text) ?? 0) > avail)
+                      Padding(
+                        padding: const EdgeInsets.only(top: 8),
+                        child: Row(children: [
+                          Icon(Icons.warning_rounded, size: 18, color: Colors.red.shade700),
+                          const SizedBox(width: 6),
+                          Expanded(child: Text(
+                            'Lô cá chỉ còn $avail con chưa phân bổ. Không thể thả ${qtyC.text} con!',
+                            style: TextStyle(color: Colors.red.shade700, fontSize: 12, fontWeight: FontWeight.w600),
+                          )),
+                        ]),
+                      ),
                   ],
                 ]),
               ),
@@ -2278,7 +2298,11 @@ class _FarmMapViewState extends State<FarmMapView> {
             actions: [
               TextButton(onPressed: () => Navigator.pop(dCtx, false), child: const Text('Huỷ')),
               FilledButton.icon(
-                onPressed: () => Navigator.pop(dCtx, true),
+                onPressed: () {
+                  final v = int.tryParse(qtyC.text) ?? 0;
+                  if (v <= 0 || v > avail) return;
+                  Navigator.pop(dCtx, true);
+                },
                 icon: const Icon(Icons.check),
                 label: const Text('Thả cá'),
               ),

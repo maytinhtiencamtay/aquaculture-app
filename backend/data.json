@@ -51,5 +51,16 @@
   "cropcycles": [],
   "equipment": [],
   "dailylogs": [],
-  "waterchangelogs": []
+  "waterchangelogs": [],
+  "sysadmins": [
+    {
+      "_id": "2e95c906-ea2f-4601-bf49-ccae6858feb8",
+      "email": "sanapos.vn@gmail.com",
+      "password": "$2a$10$VYhOaAlff1VWLPw9lo49zukt/ilO2fx4WhLnoRwBXJ/krkUEX6iDu",
+      "name": "System Admin",
+      "role": "sysadmin",
+      "createdAt": "2026-04-02T01:12:10.145Z"
+    }
+  ],
+  "licenses": []
 }
