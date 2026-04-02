@@ -243,7 +243,7 @@ class _MainScreenState extends State<MainScreen> with TickerProviderStateMixin {
             // Version
             Padding(
               padding: const EdgeInsets.all(AppSpace.lg),
-              child: Text('v1.1.0', style: AppText.tiny.copyWith(color: Colors.white.withAlpha(80))),
+              child: Text('v1.1.1', style: AppText.tiny.copyWith(color: Colors.white.withAlpha(80))),
             ),
           ],
         ),
@@ -358,7 +358,7 @@ class _MainScreenState extends State<MainScreen> with TickerProviderStateMixin {
               const Divider(color: Colors.white12),
               Padding(
                 padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 4),
-                child: Text('v1.1.0', style: AppText.tiny.copyWith(color: Colors.white38)),
+                child: Text('v1.1.1', style: AppText.tiny.copyWith(color: Colors.white38)),
               ),
               Expanded(
                 child: ListView.builder(
@@ -1406,7 +1406,7 @@ class _MainScreenState extends State<MainScreen> with TickerProviderStateMixin {
                             key: ValueKey('feed_prod_${idx}_$currentPid'),
                             initialValue: currentPid,
                             decoration: const InputDecoration(labelText: 'Sản phẩm', isDense: true, contentPadding: EdgeInsets.symmetric(horizontal: 10, vertical: 10)),
-                            items: availableProducts.map((p) => DropdownMenuItem(value: p.id, child: Text('${p.name} (tồn: ${p.stock.toStringAsFixed(0)})', overflow: TextOverflow.ellipsis))).toList(),
+                            items: availableProducts.map((p) => DropdownMenuItem(value: p.id, child: Text('${p.name} (tồn: ${_smartQty(p.stock)})', overflow: TextOverflow.ellipsis))).toList(),
                             onChanged: (v) => ss(() {
                               final p = dp.productById(v!);
                               item['productId'] = v;
@@ -1428,7 +1428,7 @@ class _MainScreenState extends State<MainScreen> with TickerProviderStateMixin {
                             labelText: 'SL xuất (${item['unit'] ?? 'kg'})',
                             isDense: true,
                             contentPadding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
-                            helperText: prod != null ? 'Tồn: ${stock.toStringAsFixed(0)}' : null,
+                            helperText: prod != null ? 'Tồn: ${_smartQty(stock)}' : null,
                             helperStyle: TextStyle(fontSize: 11, color: overStock ? Colors.red : null),
                             errorText: overStock ? 'Vượt tồn kho!' : (zeroQty && prod != null ? 'Nhập SL > 0' : null),
                             errorStyle: const TextStyle(fontSize: 11),
@@ -1460,7 +1460,7 @@ class _MainScreenState extends State<MainScreen> with TickerProviderStateMixin {
                 const Divider(),
                 Row(mainAxisAlignment: MainAxisAlignment.end, children: [
                   const Text('Tổng giá trị: ', style: TextStyle(fontWeight: FontWeight.w600)),
-                  Text('${total.toStringAsFixed(0)}đ', style: const TextStyle(fontWeight: FontWeight.w800, fontSize: 16, color: Colors.deepOrange)),
+                  Text('${_currencyFmt.format(total.round())}đ', style: const TextStyle(fontWeight: FontWeight.w800, fontSize: 16, color: Colors.deepOrange)),
                 ]),
               ]),
             ),
@@ -3434,6 +3434,7 @@ class _NavItem {
 // ═════════════════════════════════════════════════════════════════════════════
 
 final _currencyFmt = NumberFormat('#,###', 'vi');
+String _smartQty(double v) => v == v.roundToDouble() ? v.toStringAsFixed(0) : v.toStringAsFixed(1);
 
 class _GradientKpiCard extends StatelessWidget {
   final String title;
@@ -5335,9 +5336,9 @@ class _ProductViewState extends State<_ProductView> {
                               mainAxisAlignment: MainAxisAlignment.center,
                               crossAxisAlignment: CrossAxisAlignment.end,
                               children: [
-                                Text('${p.stock.toStringAsFixed(0)} ${p.unit}',
+                                Text('${_smartQty(p.stock)} ${p.unit}',
                                     style: TextStyle(fontWeight: FontWeight.w700, fontSize: 14, color: p.isLowStock ? AppColors.error : AppColors.textPrimary)),
-                                Text(p.isLowStock ? 'Sắp hết!' : 'Min: ${p.minStock.toStringAsFixed(0)}',
+                                Text(p.isLowStock ? 'Sắp hết!' : 'Min: ${_smartQty(p.minStock)}',
                                     style: TextStyle(fontSize: 11, color: p.isLowStock ? AppColors.error : AppColors.textHint)),
                               ],
                             ),

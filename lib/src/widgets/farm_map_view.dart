@@ -23,6 +23,7 @@ import '../theme/app_theme.dart';
 // ═════════════════════════════════════════════════════════════════════════════
 
 final _currFmt = NumberFormat('#,###', 'vi');
+String _smartQty(double v) => v == v.roundToDouble() ? v.toStringAsFixed(0) : v.toStringAsFixed(1);
 
 /// Evaluate water quality for a pond against its species requirements
 _WaterQuality _evaluateWater(Pond pond, DataProvider dp) {
@@ -52,13 +53,13 @@ _WaterQuality _evaluateWater(Pond pond, DataProvider dp) {
   if (pond.currentNh3 != null) {
     final nh3 = pond.currentNh3!;
     final maxNh3 = sp?.maxNh3 ?? 0.1;
-    if (nh3 > maxNh3 * 2) { dangers++; issues.add('NH₃ ${nh3.toStringAsFixed(2)}'); }
-    else if (nh3 > maxNh3) { warnings++; issues.add('NH₃ ${nh3.toStringAsFixed(2)}'); }
+    if (nh3 > maxNh3 * 2) { dangers++; issues.add('NH₃ ${nh3.toStringAsFixed(3)}'); }
+    else if (nh3 > maxNh3) { warnings++; issues.add('NH₃ ${nh3.toStringAsFixed(3)}'); }
   }
   if (pond.currentTemp != null && sp != null) {
     final t = pond.currentTemp!;
-    if (t < sp.minTemp || t > sp.maxTemp) { dangers++; issues.add('${t.toStringAsFixed(0)}°C'); }
-    else if ((t - sp.requiredTemp).abs() > 3) { warnings++; issues.add('${t.toStringAsFixed(0)}°C'); }
+    if (t < sp.minTemp || t > sp.maxTemp) { dangers++; issues.add('${t.toStringAsFixed(1)}°C'); }
+    else if ((t - sp.requiredTemp).abs() > 3) { warnings++; issues.add('${t.toStringAsFixed(1)}°C'); }
   }
 
   if (dangers > 0) return _WaterQuality.danger(issues);
@@ -1914,7 +1915,7 @@ class _FarmMapViewState extends State<FarmMapView> {
                             key: ValueKey('treat_prod_${idx}_$currentPid'),
                             initialValue: currentPid,
                             decoration: const InputDecoration(labelText: 'Thuốc / Hóa chất', isDense: true, contentPadding: EdgeInsets.symmetric(horizontal: 10, vertical: 8)),
-                            items: availableProducts.map((p) => DropdownMenuItem(value: p.id, child: Text('${p.name} (tồn: ${p.stock.toStringAsFixed(0)})', overflow: TextOverflow.ellipsis))).toList(),
+                            items: availableProducts.map((p) => DropdownMenuItem(value: p.id, child: Text('${p.name} (tồn: ${_smartQty(p.stock)})', overflow: TextOverflow.ellipsis))).toList(),
                             onChanged: (v) => ss(() {
                               final p = dp.productById(v!);
                               item['productId'] = v;
@@ -1936,7 +1937,7 @@ class _FarmMapViewState extends State<FarmMapView> {
                             labelText: 'SL xuất (${item['unit'] ?? ''})',
                             isDense: true,
                             contentPadding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
-                            helperText: prod != null ? 'Tồn: ${stock.toStringAsFixed(0)}' : null,
+                            helperText: prod != null ? 'Tồn: ${_smartQty(stock)}' : null,
                             helperStyle: TextStyle(fontSize: 11, color: overStock ? AppColors.error : null),
                             errorText: overStock ? 'Vượt tồn kho!' : (zeroQty && prod != null ? 'Nhập SL > 0' : null),
                             errorStyle: const TextStyle(fontSize: 11),
@@ -1969,7 +1970,7 @@ class _FarmMapViewState extends State<FarmMapView> {
                   const Divider(),
                   Row(mainAxisAlignment: MainAxisAlignment.end, children: [
                     const Text('Tổng giá trị: ', style: TextStyle(fontWeight: FontWeight.w600)),
-                    Text('${total.toStringAsFixed(0)}đ', style: const TextStyle(fontWeight: FontWeight.w800, fontSize: 16, color: AppColors.warning)),
+                    Text('${_currFmt.format(total.round())}đ', style: const TextStyle(fontWeight: FontWeight.w800, fontSize: 16, color: AppColors.warning)),
                   ]),
                 ],
                 const SizedBox(height: 8),
@@ -3077,7 +3078,7 @@ class _FarmMapViewState extends State<FarmMapView> {
                               key: ValueKey('feed_prod_${idx}_$currentPid'),
                               initialValue: currentPid,
                               decoration: const InputDecoration(labelText: 'Sản phẩm', isDense: true, contentPadding: EdgeInsets.symmetric(horizontal: 10, vertical: 8)),
-                              items: availableProducts.map((p) => DropdownMenuItem(value: p.id, child: Text('${p.name} (tồn: ${p.stock.toStringAsFixed(0)})', overflow: TextOverflow.ellipsis))).toList(),
+                              items: availableProducts.map((p) => DropdownMenuItem(value: p.id, child: Text('${p.name} (tồn: ${_smartQty(p.stock)})', overflow: TextOverflow.ellipsis))).toList(),
                               onChanged: (v) => ss(() {
                                 final p = dp.productById(v!);
                                 item['productId'] = v;
@@ -3099,7 +3100,7 @@ class _FarmMapViewState extends State<FarmMapView> {
                               labelText: 'SL xuất (${item['unit'] ?? 'kg'})',
                               isDense: true,
                               contentPadding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
-                              helperText: prod != null ? 'Tồn: ${stock.toStringAsFixed(0)}' : null,
+                              helperText: prod != null ? 'Tồn: ${_smartQty(stock)}' : null,
                               helperStyle: TextStyle(fontSize: 11, color: overStock ? AppColors.error : null),
                               errorText: overStock ? 'Vượt tồn kho!' : (zeroQty && prod != null ? 'Nhập SL > 0' : null),
                               errorStyle: const TextStyle(fontSize: 11),
@@ -3131,7 +3132,7 @@ class _FarmMapViewState extends State<FarmMapView> {
                   const Divider(),
                   Row(mainAxisAlignment: MainAxisAlignment.end, children: [
                     const Text('Tổng giá trị: ', style: TextStyle(fontWeight: FontWeight.w600)),
-                    Text('${total.toStringAsFixed(0)}đ', style: const TextStyle(fontWeight: FontWeight.w800, fontSize: 16, color: AppColors.warning)),
+                    Text('${_currFmt.format(total.round())}đ', style: const TextStyle(fontWeight: FontWeight.w800, fontSize: 16, color: AppColors.warning)),
                   ]),
                 ]),
               ),

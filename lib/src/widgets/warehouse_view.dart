@@ -19,6 +19,8 @@ import 'shared_widgets.dart';
 // ═════════════════════════════════════════════════════════════════════════════
 
 final _currFmt = NumberFormat('#,###', 'vi');
+/// Smart quantity display: show decimals only when needed (30.5→"30.5", 30.0→"30")
+String _smartQty(double v) => v == v.roundToDouble() ? v.toStringAsFixed(0) : v.toStringAsFixed(1);
 
 class WarehouseView extends StatefulWidget {
   final DataProvider dp;
@@ -1634,7 +1636,7 @@ class _WarehouseViewState extends State<WarehouseView> with SingleTickerProvider
                                   initialValue: item['qty']?.toString() ?? '0',
                                   decoration: InputDecoration(labelText: 'SL (${item['unit'] ?? ''})', isDense: true, contentPadding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8)),
                                   keyboardType: TextInputType.number,
-                                  onChanged: (v) => ss(() => item['qty'] = int.tryParse(v) ?? 0),
+                                  onChanged: (v) => ss(() => item['qty'] = double.tryParse(v) ?? 0),
                                 ),
                               ),
                               const SizedBox(width: 8),
@@ -1823,7 +1825,7 @@ class _WarehouseViewState extends State<WarehouseView> with SingleTickerProvider
                             initialValue: (item['receivedQty'] ?? item['qty'])?.toString() ?? '0',
                             decoration: InputDecoration(labelText: 'SL nhận (${item['unit'] ?? ''})', isDense: true, contentPadding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8)),
                             keyboardType: TextInputType.number,
-                            onChanged: (v) => ss(() { item['receivedQty'] = int.tryParse(v) ?? 0; item['qty'] = int.tryParse(v) ?? 0; }),
+                            onChanged: (v) => ss(() { item['receivedQty'] = double.tryParse(v) ?? 0; item['qty'] = double.tryParse(v) ?? 0; }),
                           )),
                           const SizedBox(width: 8),
                           Expanded(child: TextFormField(
@@ -2110,7 +2112,7 @@ class _WarehouseViewState extends State<WarehouseView> with SingleTickerProvider
                               key: ValueKey('issue_prod_${idx}_$currentPid'),
                               initialValue: currentPid,
                               decoration: const InputDecoration(labelText: 'Sản phẩm', isDense: true, contentPadding: EdgeInsets.symmetric(horizontal: 10, vertical: 8)),
-                              items: availableProducts.map((p) => DropdownMenuItem(value: p.id, child: Text('${p.name} (tồn: ${p.stock.toStringAsFixed(0)})', overflow: TextOverflow.ellipsis))).toList(),
+                              items: availableProducts.map((p) => DropdownMenuItem(value: p.id, child: Text('${p.name} (tồn: ${_smartQty(p.stock)})', overflow: TextOverflow.ellipsis))).toList(),
                               onChanged: (v) => ss(() {
                                 // Cập nhật product id, name, giá vốn, đơn vị
                                 final p = dp.productById(v!);
@@ -2133,7 +2135,7 @@ class _WarehouseViewState extends State<WarehouseView> with SingleTickerProvider
                               labelText: 'SL xuất (${item['unit'] ?? ''})',
                               isDense: true,
                               contentPadding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
-                              helperText: prod != null ? 'Tồn: ${stock.toStringAsFixed(0)}' : null,
+                              helperText: prod != null ? 'Tồn: ${_smartQty(stock)}' : null,
                               helperStyle: TextStyle(fontSize: 11, color: overStock ? AppColors.error : null),
                               errorText: overStock ? 'Vượt tồn kho!' : (zeroQty && qty == 0 && prod != null ? 'Nhập SL > 0' : null),
                               errorStyle: const TextStyle(fontSize: 11),
@@ -2314,12 +2316,12 @@ class _WarehouseViewState extends State<WarehouseView> with SingleTickerProvider
                       children: [
                         Expanded(flex: 3, child: Text('${item['productName']} (${item['unit']})', style: const TextStyle(fontSize: 13), overflow: TextOverflow.ellipsis)),
                         const SizedBox(width: 4),
-                        Expanded(flex: 1, child: Text(((item['systemQty'] as num?) ?? 0).toStringAsFixed(0), textAlign: TextAlign.center, style: const TextStyle(fontSize: 13, color: AppColors.textSecondary))),
+                        Expanded(flex: 1, child: Text(_smartQty(((item['systemQty'] as num?) ?? 0).toDouble()), textAlign: TextAlign.center, style: const TextStyle(fontSize: 13, color: AppColors.textSecondary))),
                         const SizedBox(width: 4),
                         Expanded(flex: 1, child: SizedBox(
                           height: 32,
                           child: TextFormField(
-                            initialValue: ((item['actualQty'] as num?) ?? 0).toStringAsFixed(0),
+                            initialValue: _smartQty(((item['actualQty'] as num?) ?? 0).toDouble()),
                             decoration: const InputDecoration(isDense: true, contentPadding: EdgeInsets.symmetric(horizontal: 6, vertical: 6), border: OutlineInputBorder()),
                             keyboardType: TextInputType.number,
                             textAlign: TextAlign.center,
@@ -2646,7 +2648,7 @@ class _WarehouseViewState extends State<WarehouseView> with SingleTickerProvider
       if (product == null) continue;
       final qty = ((item['qty'] as num?) ?? 0).toDouble();
       if (qty > product.stock) {
-        insufficientItems.add('${product.name}: cần ${qty.toStringAsFixed(0)}, tồn ${product.stock.toStringAsFixed(0)}');
+        insufficientItems.add('${product.name}: cần ${_smartQty(qty)}, tồn ${_smartQty(product.stock)}');
       }
     }
     if (insufficientItems.isNotEmpty) {

@@ -1201,7 +1201,7 @@ app.post('/api/notifications/check', authMiddleware, (req, res) => {
 
   // 8) High mortality rate batches (>15%)
   db.fishbatches.filter(b => b.status === 'active' && b.initialQuantity > 0).forEach(b => {
-    const dead = b.mortalityCount || 0;
+    const dead = b.mortalityQuantity || 0;
     const rate = dead / b.initialQuantity * 100;
     if (rate > 15) {
       const exists = db.notifications.find(n =>
@@ -1657,8 +1657,7 @@ function _onIssueApproved(issue) {
     }
   }
 
-  // 2) If usage type with pondId → update feedConsumed on active batches
-  //    (Only for type='usage', NOT 'feeding' – feeding logs handle their own feedConsumed)
+  // 2) If usage type with pondId → update feedConsumed on active batches (proportional by biomass)
   if (issue.type === 'usage' && issue.pondId) {
     const feedItems = issue.items.filter(it => {
       const prod = db.products.find(p => p._id === it.productId);
@@ -1669,15 +1668,17 @@ function _onIssueApproved(issue) {
       const activeBatches = db.fishbatches.filter(
         b => b.pondId === issue.pondId && b.status === 'active'
       );
-      const perBatch = totalFeedKg / (activeBatches.length || 1);
+      const totalBiomass = activeBatches.reduce((s, b) => s + (b.currentQuantity || 0) * (b.averageWeight || 1), 0);
       for (const batch of activeBatches) {
-        batch.feedConsumed = (batch.feedConsumed || 0) + perBatch;
+        const batchBiomass = (batch.currentQuantity || 0) * (batch.averageWeight || 1);
+        const share = totalBiomass > 0 ? (batchBiomass / totalBiomass) * totalFeedKg : totalFeedKg / (activeBatches.length || 1);
+        batch.feedConsumed = (batch.feedConsumed || 0) + share;
         batch.updatedAt = new Date().toISOString();
       }
     }
   }
 
-  // 3) If feeding type → update feedConsumed + create feeding log
+  // 3) If feeding type → update feedConsumed (proportional by biomass) + create feeding log
   if (issue.type === 'feeding' && issue.pondId) {
     // Update feedConsumed on active batches in this pond
     const totalFeedKg = issue.items.reduce((s, it) => s + (it.qty || 0), 0);
@@ -1687,9 +1688,11 @@ function _onIssueApproved(issue) {
         if (b.pondAllocations && b.pondAllocations.length > 0) return b.pondAllocations.some(a => a.pondId === issue.pondId);
         return b.pondId === issue.pondId;
       });
-      const perBatch = totalFeedKg / (activeBatches.length || 1);
+      const totalBiomass = activeBatches.reduce((s, b) => s + (b.currentQuantity || 0) * (b.averageWeight || 1), 0);
       for (const batch of activeBatches) {
-        batch.feedConsumed = (batch.feedConsumed || 0) + perBatch;
+        const batchBiomass = (batch.currentQuantity || 0) * (batch.averageWeight || 1);
+        const share = totalBiomass > 0 ? (batchBiomass / totalBiomass) * totalFeedKg : totalFeedKg / (activeBatches.length || 1);
+        batch.feedConsumed = (batch.feedConsumed || 0) + share;
         batch.updatedAt = new Date().toISOString();
       }
     }
