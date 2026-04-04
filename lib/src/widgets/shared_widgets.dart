@@ -16,15 +16,20 @@ class ExcelIcon extends StatelessWidget {
       width: size,
       height: size,
       decoration: BoxDecoration(
-        color: const Color(0xFF217346),
-        borderRadius: BorderRadius.circular(size * 0.18),
+        gradient: const LinearGradient(
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+          colors: [Color(0xFF2E7D32), Color(0xFF1B5E20)],
+        ),
+        borderRadius: BorderRadius.circular(size * 0.22),
+        boxShadow: [BoxShadow(color: const Color(0xFF217346).withAlpha(30), blurRadius: 4, offset: const Offset(0, 2))],
       ),
       child: Center(
         child: Text(
           'X',
           style: TextStyle(
             color: Colors.white,
-            fontSize: size * 0.58,
+            fontSize: size * 0.55,
             fontWeight: FontWeight.w900,
             height: 1,
             letterSpacing: -0.5,
@@ -39,55 +44,102 @@ class ExcelIcon extends StatelessWidget {
 // SHARED UI WIDGETS – Extracted from duplicate patterns across pages
 // ═══════════════════════════════════════════════════════════════════════════════
 
+// ─── Filter Bar Container ───────────────────────────────────────────────────
+
+/// Standard horizontal scroll filter bar with consistent padding.
+class AppFilterBar extends StatelessWidget {
+  final List<Widget> children;
+  final EdgeInsetsGeometry? padding;
+  const AppFilterBar({super.key, required this.children, this.padding});
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: padding ?? const EdgeInsets.symmetric(horizontal: 16, vertical: 6),
+      child: SingleChildScrollView(
+        scrollDirection: Axis.horizontal,
+        child: Row(
+          children: _insertGaps(children),
+        ),
+      ),
+    );
+  }
+
+  /// Insert uniform 8px gaps between children.
+  static List<Widget> _insertGaps(List<Widget> children) {
+    if (children.isEmpty) return children;
+    final result = <Widget>[];
+    for (var i = 0; i < children.length; i++) {
+      result.add(children[i]);
+      if (i < children.length - 1) result.add(const SizedBox(width: 8));
+    }
+    return result;
+  }
+}
+
 // ─── Search Box ─────────────────────────────────────────────────────────────
 
 /// Reusable pill-shaped search TextField with clear button.
-class AppSearchBox extends StatelessWidget {
+class AppSearchBox extends StatefulWidget {
   final String hint;
   final ValueChanged<String> onChanged;
-  final TextEditingController? controller;
   final double width;
 
   const AppSearchBox({
     super.key,
     this.hint = 'Tìm kiếm...',
     required this.onChanged,
-    this.controller,
     this.width = 200,
   });
+
+  @override
+  State<AppSearchBox> createState() => _AppSearchBoxState();
+}
+
+class _AppSearchBoxState extends State<AppSearchBox> {
+  final _ctrl = TextEditingController();
+  bool _hasText = false;
+
+  @override
+  void dispose() { _ctrl.dispose(); super.dispose(); }
+
+  void _onClear() {
+    _ctrl.clear();
+    widget.onChanged('');
+    setState(() => _hasText = false);
+  }
 
   @override
   Widget build(BuildContext context) {
     final isDark = Theme.of(context).brightness == Brightness.dark;
     return SizedBox(
-      width: width,
-      height: 36,
+      width: widget.width,
+      height: 34,
       child: TextField(
-        controller: controller,
-        onChanged: onChanged,
+        controller: _ctrl,
+        onChanged: (v) {
+          widget.onChanged(v);
+          if (v.isNotEmpty != _hasText) setState(() => _hasText = v.isNotEmpty);
+        },
         style: const TextStyle(fontSize: 13),
         decoration: InputDecoration(
-          hintText: hint,
-          hintStyle: TextStyle(fontSize: 13, color: isDark ? AppColors.textHintDark : AppColors.textHint),
-          prefixIcon: const Icon(Icons.search, size: 18),
-          suffixIcon: controller != null && controller!.text.isNotEmpty
-              ? IconButton(
-                  icon: const Icon(Icons.close, size: 16),
-                  onPressed: () {
-                    controller!.clear();
-                    onChanged('');
-                  },
+          hintText: widget.hint,
+          hintStyle: TextStyle(fontSize: 12, color: isDark ? AppColors.textHintDark : AppColors.textHint),
+          prefixIcon: const Icon(Icons.search_rounded, size: 18),
+          prefixIconConstraints: const BoxConstraints(minWidth: 36, minHeight: 20),
+          suffixIcon: _hasText
+              ? GestureDetector(
+                  onTap: _onClear,
+                  child: Icon(Icons.close_rounded, size: 16, color: isDark ? AppColors.textHintDark : AppColors.textHint),
                 )
               : null,
+          suffixIconConstraints: const BoxConstraints(minWidth: 32, minHeight: 20),
+          contentPadding: const EdgeInsets.symmetric(horizontal: 12),
           filled: true,
           fillColor: isDark ? AppColors.surfaceVariantDark : AppColors.surfaceVariant,
-          contentPadding: const EdgeInsets.symmetric(horizontal: 12),
-          border: OutlineInputBorder(borderRadius: BorderRadius.circular(20), borderSide: BorderSide.none),
-          enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(20), borderSide: BorderSide.none),
-          focusedBorder: OutlineInputBorder(
-            borderRadius: BorderRadius.circular(20),
-            borderSide: const BorderSide(color: AppColors.primary, width: 1.5),
-          ),
+          border: OutlineInputBorder(borderRadius: BorderRadius.circular(20), borderSide: BorderSide(color: isDark ? AppColors.borderDark : AppColors.border)),
+          enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(20), borderSide: BorderSide(color: isDark ? AppColors.borderDark : AppColors.border)),
+          focusedBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(20), borderSide: const BorderSide(color: AppColors.primary, width: 1.5)),
         ),
       ),
     );
@@ -108,21 +160,86 @@ class AppStatusChip extends StatelessWidget {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
       decoration: BoxDecoration(
-        color: color.withAlpha(20),
+        color: color.withAlpha(15),
         borderRadius: BorderRadius.circular(20),
-        border: Border.all(color: color.withAlpha(50)),
+        border: Border.all(color: color.withAlpha(40)),
       ),
-      child: Text(
-        label,
-        style: TextStyle(fontSize: 11, fontWeight: FontWeight.w600, color: color),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Container(
+            width: 6,
+            height: 6,
+            decoration: BoxDecoration(color: color, shape: BoxShape.circle,
+              boxShadow: [BoxShadow(color: color.withAlpha(60), blurRadius: 3)],
+            ),
+          ),
+          const SizedBox(width: 6),
+          Text(
+            label,
+            style: TextStyle(fontSize: 11, fontWeight: FontWeight.w600, color: color),
+          ),
+        ],
       ),
     );
   }
 }
 
-// ─── Filter Chip / Toggle Chip ──────────────────────────────────────────────
+// ─── Toggle Chip ────────────────────────────────────────────────────────────
 
-/// Animated pill toggle for filter states.
+/// Animated boolean toggle chip (on/off). For warning-style toggles (low stock, expiry).
+class AppToggleChip extends StatelessWidget {
+  final String label;
+  final bool active;
+  final VoidCallback onTap;
+  final IconData? icon;
+  final Color activeColor;
+
+  const AppToggleChip({
+    super.key,
+    required this.label,
+    required this.active,
+    required this.onTap,
+    this.icon,
+    this.activeColor = AppColors.error,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    return GestureDetector(
+      onTap: onTap,
+      child: AnimatedContainer(
+        duration: const Duration(milliseconds: 200),
+        height: 34,
+        padding: const EdgeInsets.symmetric(horizontal: 12),
+        decoration: BoxDecoration(
+          color: active ? activeColor.withAlpha(15) : (isDark ? AppColors.surfaceVariantDark : AppColors.surfaceVariant),
+          borderRadius: BorderRadius.circular(20),
+          border: Border.all(color: active ? activeColor : (isDark ? AppColors.borderDark : AppColors.border)),
+        ),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            if (icon != null) ...[
+              Icon(icon!, size: 15, color: active ? activeColor : AppColors.textHint),
+              const SizedBox(width: 5),
+            ],
+            Text(label, style: TextStyle(
+              color: active ? activeColor : AppColors.textSecondary,
+              fontWeight: active ? FontWeight.w600 : FontWeight.w400,
+              fontSize: 12,
+            )),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+// ─── Radio Filter Chip ──────────────────────────────────────────────────────
+
+/// Radio-style chip: one value selected from a group. Solid primary bg when active.
 class AppFilterChip extends StatelessWidget {
   final String label;
   final bool active;
@@ -142,22 +259,24 @@ class AppFilterChip extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final c = activeColor ?? AppColors.primary;
+    final isDark = Theme.of(context).brightness == Brightness.dark;
     return GestureDetector(
       onTap: onTap,
       child: AnimatedContainer(
         duration: const Duration(milliseconds: 200),
-        padding: EdgeInsets.symmetric(horizontal: icon != null ? 10 : 14, vertical: 6),
+        height: 34,
+        padding: EdgeInsets.symmetric(horizontal: icon != null ? 10 : 14),
         decoration: BoxDecoration(
-          color: active ? c.withAlpha(20) : (Theme.of(context).brightness == Brightness.dark ? AppColors.surfaceVariantDark : AppColors.surfaceVariant),
+          color: active ? c.withAlpha(20) : (isDark ? AppColors.surfaceVariantDark : AppColors.surfaceVariant),
           borderRadius: BorderRadius.circular(20),
-          border: Border.all(color: active ? c.withAlpha(80) : Colors.transparent),
+          border: Border.all(color: active ? c.withAlpha(80) : (isDark ? AppColors.borderDark : AppColors.border)),
         ),
         child: Row(
           mainAxisSize: MainAxisSize.min,
           children: [
             if (icon != null) ...[
-              Icon(icon, size: 14, color: active ? c : AppColors.textHint),
-              const SizedBox(width: 4),
+              Icon(icon, size: 15, color: active ? c : AppColors.textHint),
+              const SizedBox(width: 5),
             ],
             Text(
               label,
@@ -181,18 +300,23 @@ class AppClearFilterChip extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return ActionChip(
-      label: const Text('Xóa lọc', style: TextStyle(fontSize: 11)),
-      avatar: const Icon(Icons.clear_rounded, size: 14),
-      onPressed: onTap,
-      visualDensity: VisualDensity.compact,
+    return SizedBox(
+      height: 34,
+      child: ActionChip(
+        avatar: const Icon(Icons.clear_rounded, size: 14),
+        label: const Text('Xóa lọc', style: TextStyle(fontSize: 12)),
+        padding: const EdgeInsets.symmetric(horizontal: 4),
+        visualDensity: VisualDensity.compact,
+        onPressed: onTap,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+      ),
     );
   }
 }
 
 // ─── Dropdown Filter ────────────────────────────────────────────────────────
 
-/// Dropdown chip for selecting a filter value from a list.
+/// Dropdown filter taking a generic List of DropdownMenuItems.
 class AppDropFilter<T> extends StatelessWidget {
   final T? value;
   final List<DropdownMenuItem<T>> items;
@@ -216,23 +340,110 @@ class AppDropFilter<T> extends StatelessWidget {
       padding: const EdgeInsets.symmetric(horizontal: 10),
       decoration: BoxDecoration(
         color: hasValue
-            ? AppColors.primary.withAlpha(20)
+            ? AppColors.primary.withAlpha(15)
             : (isDark ? AppColors.surfaceVariantDark : AppColors.surfaceVariant),
         borderRadius: BorderRadius.circular(20),
-        border: hasValue ? Border.all(color: AppColors.primary.withAlpha(60)) : null,
+        border: Border.all(color: hasValue ? AppColors.primary.withAlpha(60) : (isDark ? AppColors.borderDark : AppColors.border)),
       ),
       child: DropdownButtonHideUnderline(
         child: DropdownButton<T>(
           value: value,
           hint: Text(hint, style: const TextStyle(fontSize: 12)),
-          icon: const Icon(Icons.arrow_drop_down, size: 18),
+          icon: Icon(Icons.arrow_drop_down, size: 18, color: hasValue ? AppColors.primary : AppColors.textHint),
           isDense: true,
-          style: TextStyle(fontSize: 12, color: isDark ? AppColors.textPrimaryDark : AppColors.textPrimary),
+          style: TextStyle(fontSize: 12, fontWeight: FontWeight.w500, color: hasValue ? AppColors.primary : (isDark ? AppColors.textPrimaryDark : AppColors.textPrimary)),
           items: items,
           onChanged: onChanged,
         ),
       ),
     );
+  }
+}
+
+/// Dropdown filter from a Map<String, String> — convenience for common pattern.
+class AppDropMapFilter extends StatelessWidget {
+  final String value;
+  final Map<String, String> items;
+  final ValueChanged<String> onChanged;
+
+  const AppDropMapFilter({
+    super.key,
+    required this.value,
+    required this.items,
+    required this.onChanged,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    final active = value != items.keys.first;
+    return Container(
+      height: 34,
+      padding: const EdgeInsets.symmetric(horizontal: 10),
+      decoration: BoxDecoration(
+        color: active
+            ? AppColors.primary.withAlpha(15)
+            : (isDark ? AppColors.surfaceVariantDark : AppColors.surfaceVariant),
+        borderRadius: BorderRadius.circular(20),
+        border: Border.all(color: active ? AppColors.primary.withAlpha(60) : (isDark ? AppColors.borderDark : AppColors.border)),
+      ),
+      child: DropdownButtonHideUnderline(
+        child: DropdownButton<String>(
+          value: value,
+          isDense: true,
+          icon: Icon(Icons.arrow_drop_down, size: 18, color: active ? AppColors.primary : AppColors.textHint),
+          style: TextStyle(fontSize: 12, fontWeight: FontWeight.w500, color: active ? AppColors.primary : (isDark ? AppColors.textSecondaryDark : AppColors.textSecondary)),
+          items: items.entries.map((e) => DropdownMenuItem(value: e.key, child: Text(e.value))).toList(),
+          onChanged: (v) { if (v != null) onChanged(v); },
+        ),
+      ),
+    );
+  }
+}
+
+/// Chip-like filter that triggers a callback (for bottom sheet pickers etc.)
+class AppTapFilter extends StatelessWidget {
+  final String label;
+  final bool active;
+  final VoidCallback onTap;
+
+  const AppTapFilter({super.key, required this.label, required this.active, required this.onTap});
+
+  @override
+  Widget build(BuildContext context) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    return GestureDetector(
+      onTap: onTap,
+      child: Container(
+        height: 34,
+        padding: const EdgeInsets.symmetric(horizontal: 12),
+        decoration: BoxDecoration(
+          color: active
+              ? AppColors.primary.withAlpha(15)
+              : (isDark ? AppColors.surfaceVariantDark : AppColors.surfaceVariant),
+          borderRadius: BorderRadius.circular(20),
+          border: Border.all(color: active ? AppColors.primary.withAlpha(60) : (isDark ? AppColors.borderDark : AppColors.border)),
+        ),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Text(label, style: TextStyle(fontSize: 12, fontWeight: FontWeight.w500, color: active ? AppColors.primary : AppColors.textSecondary)),
+            const SizedBox(width: 4),
+            Icon(Icons.arrow_drop_down, size: 16, color: active ? AppColors.primary : AppColors.textHint),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+/// Inline filter label showing count/text before filter controls.
+class AppFilterLabel extends StatelessWidget {
+  final String text;
+  const AppFilterLabel(this.text, {super.key});
+  @override
+  Widget build(BuildContext context) {
+    return Text(text, style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 13, color: AppColors.textSecondary));
   }
 }
 
@@ -257,9 +468,16 @@ class AppEmptyState extends StatelessWidget {
       child: Column(
         mainAxisSize: MainAxisSize.min,
         children: [
-          Icon(icon, size: iconSize, color: AppColors.textHint.withAlpha(120)),
-          const SizedBox(height: 12),
-          Text(message, style: const TextStyle(fontSize: 14, color: AppColors.textHint)),
+          Container(
+            padding: const EdgeInsets.all(20),
+            decoration: BoxDecoration(
+              color: AppColors.textHint.withAlpha(8),
+              shape: BoxShape.circle,
+            ),
+            child: Icon(icon, size: iconSize, color: AppColors.textHint.withAlpha(100)),
+          ),
+          const SizedBox(height: 16),
+          Text(message, style: const TextStyle(fontSize: 14, color: AppColors.textHint), textAlign: TextAlign.center),
         ],
       ),
     );
@@ -289,15 +507,23 @@ class AppMiniStat extends StatelessWidget {
       child: Container(
         padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
         decoration: BoxDecoration(
-          color: color.withAlpha(15),
-          borderRadius: BorderRadius.circular(12),
-          border: Border.all(color: color.withAlpha(40)),
+          color: color.withAlpha(10),
+          borderRadius: BorderRadius.circular(14),
+          border: Border.all(color: color.withAlpha(30)),
         ),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             if (icon != null)
-              Icon(icon, size: 16, color: color),
+              Container(
+                padding: const EdgeInsets.all(4),
+                margin: const EdgeInsets.only(bottom: 4),
+                decoration: BoxDecoration(
+                  color: color.withAlpha(20),
+                  borderRadius: BorderRadius.circular(6),
+                ),
+                child: Icon(icon, size: 14, color: color),
+              ),
             Text(value, style: TextStyle(fontSize: 20, fontWeight: FontWeight.w800, color: color)),
             const SizedBox(height: 2),
             Text(label, style: const TextStyle(fontSize: 11, color: AppColors.textSecondary)),
@@ -329,6 +555,15 @@ class AppSectionHeader extends StatelessWidget {
       padding: const EdgeInsets.fromLTRB(20, 20, 20, 12),
       child: Row(
         children: [
+          Container(
+            width: 3,
+            height: 20,
+            margin: const EdgeInsets.only(right: 10),
+            decoration: BoxDecoration(
+              color: AppColors.primary,
+              borderRadius: BorderRadius.circular(2),
+            ),
+          ),
           Text(title, style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w700)),
           const Spacer(),
           if (onAdd != null)

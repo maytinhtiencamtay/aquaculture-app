@@ -224,40 +224,26 @@ class _PaymentVoucherViewState extends State<PaymentVoucherView> with SingleTick
   // ═══════════════════════════════════════════════════════════════════
 
   Widget _buildFilterRow() {
-    return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 4),
-      child: SingleChildScrollView(
-        scrollDirection: Axis.horizontal,
-        child: Row(
-          children: [
-            _FilterChip(
-              label: _filterStatus == 'all' ? 'Trạng thái' : _statusName(_filterStatus),
-              active: _filterStatus != 'all',
-              onTap: () => _showStatusFilter(),
-            ),
-            const SizedBox(width: 8),
-            _FilterChip(
-              label: _filterMethod == 'all' ? 'Hình thức' : _methodName(_filterMethod),
-              active: _filterMethod != 'all',
-              onTap: () => _showMethodFilter(),
-            ),
-            const SizedBox(width: 8),
-            _FilterChip(
-              label: _dateRange != null ? '${_dateFmt.format(_dateRange!.start)} - ${_dateFmt.format(_dateRange!.end)}' : 'Khoảng thời gian',
-              active: _dateRange != null,
-              onTap: () => _pickDateRange(),
-            ),
-            if (_filterStatus != 'all' || _filterMethod != 'all' || _dateRange != null) ...[
-              const SizedBox(width: 8),
-              ActionChip(
-                avatar: const Icon(Icons.clear, size: 16),
-                label: const Text('Xoá lọc'),
-                onPressed: () => setState(() { _filterStatus = 'all'; _filterMethod = 'all'; _dateRange = null; }),
-              ),
-            ],
-          ],
+    return AppFilterBar(
+      children: [
+        AppTapFilter(
+          label: _filterStatus == 'all' ? 'Trạng thái' : _statusName(_filterStatus),
+          active: _filterStatus != 'all',
+          onTap: () => _showStatusFilter(),
         ),
-      ),
+        AppTapFilter(
+          label: _filterMethod == 'all' ? 'Hình thức' : _methodName(_filterMethod),
+          active: _filterMethod != 'all',
+          onTap: () => _showMethodFilter(),
+        ),
+        AppTapFilter(
+          label: _dateRange != null ? '${_dateFmt.format(_dateRange!.start)} - ${_dateFmt.format(_dateRange!.end)}' : 'Khoảng thời gian',
+          active: _dateRange != null,
+          onTap: () => _pickDateRange(),
+        ),
+        if (_filterStatus != 'all' || _filterMethod != 'all' || _dateRange != null)
+          AppClearFilterChip(onTap: () => setState(() { _filterStatus = 'all'; _filterMethod = 'all'; _dateRange = null; })),
+      ],
     );
   }
 
@@ -1259,36 +1245,6 @@ class _StatusChip extends StatelessWidget {
       padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
       decoration: BoxDecoration(color: color.withAlpha(25), borderRadius: BorderRadius.circular(20), border: Border.all(color: color.withAlpha(60))),
       child: Text(label, style: TextStyle(fontSize: 11, fontWeight: FontWeight.w600, color: color)),
-    );
-  }
-}
-
-class _FilterChip extends StatelessWidget {
-  final String label;
-  final bool active;
-  final VoidCallback onTap;
-  const _FilterChip({required this.label, required this.active, required this.onTap});
-  @override
-  Widget build(BuildContext context) {
-    return InkWell(
-      onTap: onTap,
-      borderRadius: BorderRadius.circular(20),
-      child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-        decoration: BoxDecoration(
-          color: active ? AppColors.primary.withAlpha(20) : AppColors.surfaceVariant,
-          borderRadius: BorderRadius.circular(20),
-          border: Border.all(color: active ? AppColors.primary : AppColors.border),
-        ),
-        child: Row(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Text(label, style: TextStyle(fontSize: 12, fontWeight: FontWeight.w500, color: active ? AppColors.primary : AppColors.textSecondary)),
-            const SizedBox(width: 4),
-            Icon(Icons.arrow_drop_down, size: 16, color: active ? AppColors.primary : AppColors.textHint),
-          ],
-        ),
-      ),
     );
   }
 }

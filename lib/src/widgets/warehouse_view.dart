@@ -1,6 +1,9 @@
+import 'dart:html' as html;
+import 'dart:typed_data';
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import 'package:provider/provider.dart';
+import 'package:excel/excel.dart' as xl;
 import '../models/product.dart';
 import '../models/purchase_order.dart';
 import '../models/stock_receipt.dart';
@@ -127,6 +130,268 @@ class _WarehouseViewState extends State<WarehouseView> with SingleTickerProvider
     ExportService.exportPngAndNotify(context: context, captureKey: _captureKey, filePrefix: 'kho');
   }
 
+  // ── Import / Export Products ──
+
+  static const _importHeaders = ['Mã SKU', 'Tên', 'Danh mục', 'Thương hiệu', 'Xuất xứ', 'Đơn vị', 'Mô tả', 'Giá bán', 'Giá vốn', 'Tồn kho', 'Tồn tối thiểu', 'Tồn tối đa', 'Vị trí', 'Hạn sử dụng (dd/MM/yyyy)', 'Ghi chú'];
+  static const _categoryMap = {'Thức ăn': 'feed', 'Giống': 'seed', 'Vi sinh/Hoá chất': 'chemical', 'Thuốc': 'medicine', 'Phụ kiện': 'accessory', 'Dụng cụ': 'tool'};
+
+  void _exportProductTemplate() {
+    final sampleRow = ['SP001', 'Thức ăn cá tra', 'Thức ăn', 'Cargill', 'VN', 'kg', 'Thức ăn nổi', 50000, 40000, 100, 20, 500, 'Kho A', '31/12/2026', ''];
+    ExportService.exportExcelAndNotify(
+      context: context,
+      sheetName: 'Mẫu nhập hàng',
+      headers: _importHeaders,
+      rows: [sampleRow],
+      filePrefix: 'mau_nhap_hang_hoa',
+    );
+  }
+
+  void _exportProductsFull() {
+    final headers = ['Mã SKU', 'Tên', 'Danh mục', 'Thương hiệu', 'Xuất xứ', 'Đơn vị', 'Mô tả', 'Giá bán', 'Giá vốn', 'Tồn kho', 'Tồn tối thiểu', 'Tồn tối đa', 'Vị trí', 'Hạn sử dụng (dd/MM/yyyy)', 'Ghi chú', 'Trạng thái'];
+    final rows = dp.products.map((p) => [
+      p.sku, p.name, p.categoryLabel, p.brand, p.origin, p.unit, p.description,
+      p.price, p.costPrice, p.stock, p.minStock, p.maxStock, p.location,
+      p.expiryDate != null ? _dateFmt.format(p.expiryDate!) : '', p.note,
+      p.isActive ? 'Hoạt động' : 'Ngừng',
+    ]).toList();
+    ExportService.exportExcelAndNotify(context: context, sheetName: 'Danh sách hàng hóa', headers: headers, rows: rows, filePrefix: 'danh_sach_hang_hoa');
+  }
+
+  Future<void> _importProducts() async {
+    final input = html.FileUploadInputElement()..accept = '.xlsx,.xls';
+    input.click();
+    await input.onChange.first;
+    if (input.files == null || input.files!.isEmpty) return;
+
+    final file = input.files!.first;
+    final reader = html.FileReader();
+    reader.readAsArrayBuffer(file);
+    await reader.onLoadEnd.first;
+
+    final bytes = reader.result as Uint8List;
+    final excel = xl.Excel.decodeBytes(bytes);
+    if (excel.tables.isEmpty) {
+      _showSnack('File Excel không có dữ liệu', isError: true);
+      return;
+    }
+
+    final sheet = excel.tables.values.first;
+    if (sheet.maxRows < 2) {
+      _showSnack('File Excel không có dòng dữ liệu (chỉ có header)', isError: true);
+      return;
+    }
+
+    // Parse headers from row 0
+    final headerRow = sheet.row(0);
+    final colMap = <String, int>{};
+    for (var c = 0; c < headerRow.length; c++) {
+      final val = headerRow[c]?.value?.toString().trim() ?? '';
+      if (val.isNotEmpty) colMap[val] = c;
+    }
+
+    // Validate required columns
+    if (!colMap.containsKey('Tên')) {
+      _showSnack('Thiếu cột bắt buộc "Tên" trong file Excel', isError: true);
+      return;
+    }
+
+    String _cell(List<xl.Data?> row, String header) {
+      final idx = colMap[header];
+      if (idx == null || idx >= row.length) return '';
+      return row[idx]?.value?.toString().trim() ?? '';
+    }
+
+    double _cellNum(List<xl.Data?> row, String header) {
+      final s = _cell(row, header);
+      return double.tryParse(s.replaceAll(',', '')) ?? 0;
+    }
+
+    DateTime? _cellDate(List<xl.Data?> row, String header) {
+      final s = _cell(row, header);
+      if (s.isEmpty) return null;
+      // Try dd/MM/yyyy
+      try { return DateFormat('dd/MM/yyyy').parseStrict(s); } catch (_) {}
+      // Try ISO format
+      return DateTime.tryParse(s);
+    }
+
+    // Show preview dialog
+    final parsed = <Map<String, dynamic>>[];
+    final errors = <String>[];
+
+    for (var r = 1; r < sheet.maxRows; r++) {
+      final row = sheet.row(r);
+      final name = _cell(row, 'Tên');
+      if (name.isEmpty) {
+        errors.add('Dòng ${r + 1}: Thiếu tên sản phẩm – bỏ qua');
+        continue;
+      }
+
+      final catLabel = _cell(row, 'Danh mục');
+      final category = _categoryMap[catLabel] ?? 'feed';
+
+      parsed.add({
+        'sku': _cell(row, 'Mã SKU'),
+        'name': name,
+        'category': category,
+        'brand': _cell(row, 'Thương hiệu'),
+        'origin': _cell(row, 'Xuất xứ'),
+        'unit': _cell(row, 'Đơn vị').isEmpty ? 'kg' : _cell(row, 'Đơn vị'),
+        'description': _cell(row, 'Mô tả'),
+        'price': _cellNum(row, 'Giá bán'),
+        'costPrice': _cellNum(row, 'Giá vốn'),
+        'stock': _cellNum(row, 'Tồn kho'),
+        'minStock': _cellNum(row, 'Tồn tối thiểu'),
+        'maxStock': _cellNum(row, 'Tồn tối đa'),
+        'location': _cell(row, 'Vị trí'),
+        'expiryDate': _cellDate(row, 'Hạn sử dụng (dd/MM/yyyy)')?.toIso8601String(),
+        'note': _cell(row, 'Ghi chú'),
+        'isActive': true,
+      });
+    }
+
+    if (parsed.isEmpty) {
+      _showSnack('Không có dòng hợp lệ trong file Excel${errors.isNotEmpty ? '\n${errors.join("\n")}' : ''}', isError: true);
+      return;
+    }
+
+    // Show confirmation dialog
+    if (!mounted) return;
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: Row(children: [
+          const Icon(Icons.upload_file_rounded, color: AppColors.primary),
+          const SizedBox(width: 8),
+          Text('Nhập ${parsed.length} sản phẩm'),
+        ]),
+        content: SizedBox(
+          width: 600,
+          height: 400,
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              if (errors.isNotEmpty) ...[
+                Container(
+                  padding: const EdgeInsets.all(8),
+                  decoration: BoxDecoration(color: AppColors.warning.withOpacity(0.1), borderRadius: BorderRadius.circular(8)),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text('⚠️ ${errors.length} dòng bị bỏ qua:', style: const TextStyle(fontWeight: FontWeight.bold, color: AppColors.warning)),
+                      const SizedBox(height: 4),
+                      ...errors.take(5).map((e) => Text(e, style: const TextStyle(fontSize: 12))),
+                      if (errors.length > 5) Text('... và ${errors.length - 5} dòng khác', style: const TextStyle(fontSize: 12, fontStyle: FontStyle.italic)),
+                    ],
+                  ),
+                ),
+                const SizedBox(height: 12),
+              ],
+              Text('Xem trước ${parsed.length} sản phẩm sẽ được thêm:', style: const TextStyle(fontWeight: FontWeight.w600)),
+              const SizedBox(height: 8),
+              Expanded(
+                child: SingleChildScrollView(
+                  scrollDirection: Axis.horizontal,
+                  child: SingleChildScrollView(
+                    child: DataTable(
+                      columnSpacing: 16,
+                      headingRowHeight: 36,
+                      dataRowMinHeight: 32,
+                      dataRowMaxHeight: 32,
+                      columns: const [
+                        DataColumn(label: Text('SKU', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 12))),
+                        DataColumn(label: Text('Tên', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 12))),
+                        DataColumn(label: Text('Loại', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 12))),
+                        DataColumn(label: Text('ĐV', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 12))),
+                        DataColumn(label: Text('Giá bán', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 12)), numeric: true),
+                        DataColumn(label: Text('Giá vốn', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 12)), numeric: true),
+                        DataColumn(label: Text('Tồn kho', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 12)), numeric: true),
+                      ],
+                      rows: parsed.take(50).map((p) {
+                        final catReverse = _categoryMap.entries.where((e) => e.value == p['category']).firstOrNull;
+                        return DataRow(cells: [
+                          DataCell(Text(p['sku'] ?? '', style: const TextStyle(fontSize: 12))),
+                          DataCell(SizedBox(width: 160, child: Text(p['name'] ?? '', style: const TextStyle(fontSize: 12), overflow: TextOverflow.ellipsis))),
+                          DataCell(Text(catReverse?.key ?? p['category'] ?? '', style: const TextStyle(fontSize: 12))),
+                          DataCell(Text(p['unit'] ?? '', style: const TextStyle(fontSize: 12))),
+                          DataCell(Text(_currFmt.format(p['price'] ?? 0), style: const TextStyle(fontSize: 12))),
+                          DataCell(Text(_currFmt.format(p['costPrice'] ?? 0), style: const TextStyle(fontSize: 12))),
+                          DataCell(Text(_smartQty((p['stock'] as num?)?.toDouble() ?? 0), style: const TextStyle(fontSize: 12))),
+                        ]);
+                      }).toList(),
+                    ),
+                  ),
+                ),
+              ),
+              if (parsed.length > 50) Padding(
+                padding: const EdgeInsets.only(top: 4),
+                child: Text('... và ${parsed.length - 50} sản phẩm khác', style: const TextStyle(fontSize: 12, fontStyle: FontStyle.italic)),
+              ),
+            ],
+          ),
+        ),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('Huỷ')),
+          FilledButton.icon(
+            onPressed: () => Navigator.pop(ctx, true),
+            icon: const Icon(Icons.check),
+            label: Text('Nhập ${parsed.length} sản phẩm'),
+          ),
+        ],
+      ),
+    );
+
+    if (confirmed != true) return;
+
+    // Import all products
+    int success = 0;
+    int failed = 0;
+    for (final data in parsed) {
+      final ok = await dp.create('products', data);
+      if (ok) {
+        success++;
+      } else {
+        failed++;
+      }
+    }
+    _showSnack('Đã nhập $success sản phẩm${failed > 0 ? ', $failed lỗi' : ''}', isError: failed > 0 && success == 0);
+    setState(() {});
+  }
+
+  void _showImportExportMenu() {
+    showModalBottomSheet(
+      context: context,
+      builder: (ctx) => SafeArea(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            ListTile(
+              leading: const Icon(Icons.download_rounded, color: AppColors.primary),
+              title: const Text('Xuất danh sách hàng hóa'),
+              subtitle: const Text('Xuất toàn bộ sản phẩm ra file Excel'),
+              onTap: () { Navigator.pop(ctx); _exportProductsFull(); },
+            ),
+            const Divider(height: 1),
+            ListTile(
+              leading: const Icon(Icons.description_rounded, color: AppColors.secondary),
+              title: const Text('Tải file mẫu nhập hàng'),
+              subtitle: const Text('File Excel mẫu với header và dòng ví dụ'),
+              onTap: () { Navigator.pop(ctx); _exportProductTemplate(); },
+            ),
+            const Divider(height: 1),
+            ListTile(
+              leading: const Icon(Icons.upload_file_rounded, color: AppColors.success),
+              title: const Text('Nhập hàng hóa từ Excel'),
+              subtitle: const Text('Tải file Excel lên để thêm sản phẩm hàng loạt'),
+              onTap: () { Navigator.pop(ctx); _importProducts(); },
+            ),
+            const SizedBox(height: 8),
+          ],
+        ),
+      ),
+    );
+  }
+
   static final _dateFmt = DateFormat('dd/MM/yyyy');
 
   void _showSnack(String msg, {bool isError = false}) {
@@ -197,6 +462,18 @@ class _WarehouseViewState extends State<WarehouseView> with SingleTickerProvider
                 const SizedBox(width: AppSpace.xs + 2),
               ],
               const Spacer(),
+              // Import/Export products (only on Products tab)
+              ListenableBuilder(
+                listenable: _tabCtrl,
+                builder: (_, __) => _tabCtrl.index == 0
+                    ? IconButton(
+                        icon: const Icon(Icons.swap_vert_rounded, size: 20),
+                        tooltip: 'Nhập/Xuất hàng hóa',
+                        onPressed: _showImportExportMenu,
+                        style: IconButton.styleFrom(foregroundColor: AppColors.success),
+                      )
+                    : const SizedBox.shrink(),
+              ),
               // Export buttons
               IconButton(
                 icon: const ExcelIcon(size: 20),
@@ -340,15 +617,7 @@ class _WarehouseViewState extends State<WarehouseView> with SingleTickerProvider
   // FILTER BAR HELPER
   // ═══════════════════════════════════════════════════════════════════════
 
-  Widget _buildFilterBar({required List<Widget> children}) {
-    return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
-      child: SingleChildScrollView(
-        scrollDirection: Axis.horizontal,
-        child: Row(children: children),
-      ),
-    );
-  }
+  // Removed _buildFilterBar — using AppFilterBar from shared_widgets
 
   // ═══════════════════════════════════════════════════════════════════════
   // TAB 1: TỔNG KHO (Products)
@@ -381,21 +650,16 @@ class _WarehouseViewState extends State<WarehouseView> with SingleTickerProvider
     final hasProdFilter = _prodCategory != 'all' || _prodLowStock || _prodExpiring || _prodSearch.isNotEmpty;
     return Column(
       children: [
-        _buildFilterBar(children: [
-          Text('${products.length} sản phẩm', style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 13, color: AppColors.textSecondary)),
-          const SizedBox(width: 10),
-          _SearchBox(hint: 'Tìm tên, mã, thương hiệu...', onChanged: (v) => setState(() => _prodSearch = v)),
-          const SizedBox(width: 8),
-          _DropFilter(value: _prodCategory, items: const {'all': 'Tất cả loại', 'feed': 'Thức ăn', 'seed': 'Giống', 'chemical': 'Vi sinh/HChất', 'medicine': 'Thuốc', 'accessory': 'Phụ kiện', 'tool': 'Dụng cụ'}, onChanged: (v) => setState(() => _prodCategory = v)),
-          const SizedBox(width: 8),
-          _ToggleChip(label: 'Sắp hết', active: _prodLowStock, icon: Icons.warning_amber_rounded, onTap: () => setState(() => _prodLowStock = !_prodLowStock)),
-          const SizedBox(width: 8),
+        AppFilterBar(children: [
+          AppFilterLabel('${products.length} sản phẩm'),
+          AppSearchBox(hint: 'Tìm tên, mã, thương hiệu...', onChanged: (v) => setState(() => _prodSearch = v)),
+          AppDropMapFilter(value: _prodCategory, items: const {'all': 'Tất cả loại', 'feed': 'Thức ăn', 'seed': 'Giống', 'chemical': 'Vi sinh/HChất', 'medicine': 'Thuốc', 'accessory': 'Phụ kiện', 'tool': 'Dụng cụ'}, onChanged: (v) => setState(() => _prodCategory = v)),
+          AppToggleChip(label: 'Sắp hết', active: _prodLowStock, icon: Icons.warning_amber_rounded, onTap: () => setState(() => _prodLowStock = !_prodLowStock)),
           if (expiringCount > 0) ...[
-            _ToggleChip(label: 'Hết hạn', active: _prodExpiring, icon: Icons.timer_off_rounded, onTap: () => setState(() => _prodExpiring = !_prodExpiring)),
-            const SizedBox(width: 8),
+            AppToggleChip(label: 'Hết hạn', active: _prodExpiring, icon: Icons.timer_off_rounded, onTap: () => setState(() => _prodExpiring = !_prodExpiring)),
           ],
-          _DropFilter(value: _prodSort, items: const {'name_asc': 'Tên A→Z', 'name_desc': 'Tên Z→A', 'stock_asc': 'Tồn thấp', 'price_desc': 'Giá cao', 'value_desc': 'Giá trị kho', 'newest': 'Mới nhất'}, onChanged: (v) => setState(() => _prodSort = v)),
-          if (hasProdFilter) ...[const SizedBox(width: 8), _ClearFilterChip(onPressed: () => setState(() { _prodCategory = 'all'; _prodLowStock = false; _prodExpiring = false; _prodSearch = ''; }))],
+          AppDropMapFilter(value: _prodSort, items: const {'name_asc': 'Tên A→Z', 'name_desc': 'Tên Z→A', 'stock_asc': 'Tồn thấp', 'price_desc': 'Giá cao', 'value_desc': 'Giá trị kho', 'newest': 'Mới nhất'}, onChanged: (v) => setState(() => _prodSort = v)),
+          if (hasProdFilter) AppClearFilterChip(onTap: () => setState(() { _prodCategory = 'all'; _prodLowStock = false; _prodExpiring = false; _prodSearch = ''; })),
         ]),
         // ── Alert banners ──
         if (dp.lowStockCount > 0 || expiringCount > 0 || inactiveCount > 0)
@@ -777,11 +1041,10 @@ class _WarehouseViewState extends State<WarehouseView> with SingleTickerProvider
     orders.sort((a, b) => b.date.compareTo(a.date));
     return Column(
       children: [
-        _buildFilterBar(children: [
-          Text('${orders.length} phiếu', style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 13, color: AppColors.textSecondary)),
-          const SizedBox(width: 10),
-          _DropFilter(value: _poStatus, items: const {'all': 'Trạng thái', 'draft': 'Nháp', 'sent': 'Đã gửi NCC', 'waiting_receipt': 'Chờ nhập kho', 'completed': 'Đã nhập kho', 'cancelled': 'Đã huỷ'}, onChanged: (v) => setState(() => _poStatus = v)),
-          if (_poStatus != 'all') ...[const SizedBox(width: 8), _ClearFilterChip(onPressed: () => setState(() => _poStatus = 'all'))],
+        AppFilterBar(children: [
+          AppFilterLabel('${orders.length} phiếu'),
+          AppDropMapFilter(value: _poStatus, items: const {'all': 'Trạng thái', 'draft': 'Nháp', 'sent': 'Đã gửi NCC', 'waiting_receipt': 'Chờ nhập kho', 'completed': 'Đã nhập kho', 'cancelled': 'Đã huỷ'}, onChanged: (v) => setState(() => _poStatus = v)),
+          if (_poStatus != 'all') AppClearFilterChip(onTap: () => setState(() => _poStatus = 'all')),
         ]),
         Expanded(
           child: orders.isEmpty
@@ -899,11 +1162,10 @@ class _WarehouseViewState extends State<WarehouseView> with SingleTickerProvider
     receipts.sort((a, b) => b.date.compareTo(a.date));
     return Column(
       children: [
-        _buildFilterBar(children: [
-          Text('${receipts.length} phiếu', style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 13, color: AppColors.textSecondary)),
-          const SizedBox(width: 10),
-          _DropFilter(value: _receiptStatus, items: const {'all': 'Trạng thái', 'draft': 'Nháp', 'approved': 'Đã nhập kho', 'cancelled': 'Đã huỷ'}, onChanged: (v) => setState(() => _receiptStatus = v)),
-          if (_receiptStatus != 'all') ...[const SizedBox(width: 8), _ClearFilterChip(onPressed: () => setState(() => _receiptStatus = 'all'))],
+        AppFilterBar(children: [
+          AppFilterLabel('${receipts.length} phiếu'),
+          AppDropMapFilter(value: _receiptStatus, items: const {'all': 'Trạng thái', 'draft': 'Nháp', 'approved': 'Đã nhập kho', 'cancelled': 'Đã huỷ'}, onChanged: (v) => setState(() => _receiptStatus = v)),
+          if (_receiptStatus != 'all') AppClearFilterChip(onTap: () => setState(() => _receiptStatus = 'all')),
         ]),
         Expanded(
           child: receipts.isEmpty
@@ -1011,11 +1273,10 @@ class _WarehouseViewState extends State<WarehouseView> with SingleTickerProvider
     issues.sort((a, b) => b.date.compareTo(a.date));
     return Column(
       children: [
-        _buildFilterBar(children: [
-          Text('${issues.length} phiếu', style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 13, color: AppColors.textSecondary)),
-          const SizedBox(width: 10),
-          _DropFilter(value: _issueStatus, items: const {'all': 'Trạng thái', 'draft': 'Nháp', 'approved': 'Đã duyệt'}, onChanged: (v) => setState(() => _issueStatus = v)),
-          if (_issueStatus != 'all') ...[const SizedBox(width: 8), _ClearFilterChip(onPressed: () => setState(() => _issueStatus = 'all'))],
+        AppFilterBar(children: [
+          AppFilterLabel('${issues.length} phiếu'),
+          AppDropMapFilter(value: _issueStatus, items: const {'all': 'Trạng thái', 'draft': 'Nháp', 'approved': 'Đã duyệt'}, onChanged: (v) => setState(() => _issueStatus = v)),
+          if (_issueStatus != 'all') AppClearFilterChip(onTap: () => setState(() => _issueStatus = 'all')),
         ]),
         Expanded(
           child: issues.isEmpty
@@ -1123,11 +1384,10 @@ class _WarehouseViewState extends State<WarehouseView> with SingleTickerProvider
     takes.sort((a, b) => b.date.compareTo(a.date));
     return Column(
       children: [
-        _buildFilterBar(children: [
-          Text('${takes.length} phiếu', style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 13, color: AppColors.textSecondary)),
-          const SizedBox(width: 10),
-          _DropFilter(value: _stStatus, items: const {'all': 'Trạng thái', 'draft': 'Nháp', 'approved': 'Đã duyệt'}, onChanged: (v) => setState(() => _stStatus = v)),
-          if (_stStatus != 'all') ...[const SizedBox(width: 8), _ClearFilterChip(onPressed: () => setState(() => _stStatus = 'all'))],
+        AppFilterBar(children: [
+          AppFilterLabel('${takes.length} phiếu'),
+          AppDropMapFilter(value: _stStatus, items: const {'all': 'Trạng thái', 'draft': 'Nháp', 'approved': 'Đã duyệt'}, onChanged: (v) => setState(() => _stStatus = v)),
+          if (_stStatus != 'all') AppClearFilterChip(onTap: () => setState(() => _stStatus = 'all')),
         ]),
         Expanded(
           child: takes.isEmpty
@@ -1203,11 +1463,10 @@ class _WarehouseViewState extends State<WarehouseView> with SingleTickerProvider
     if (_suppSearch.isNotEmpty) suppliers = suppliers.where((s) => s.name.toLowerCase().contains(_suppSearch.toLowerCase()) || s.phone.toLowerCase().contains(_suppSearch.toLowerCase())).toList();
     return Column(
       children: [
-        _buildFilterBar(children: [
-          Text('${suppliers.length} NCC', style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 13, color: AppColors.textSecondary)),
-          const SizedBox(width: 10),
-          _SearchBox(hint: 'Tìm NCC...', onChanged: (v) => setState(() => _suppSearch = v)),
-          if (_suppSearch.isNotEmpty) ...[const SizedBox(width: 8), _ClearFilterChip(onPressed: () => setState(() => _suppSearch = ''))],
+        AppFilterBar(children: [
+          AppFilterLabel('${suppliers.length} NCC'),
+          AppSearchBox(hint: 'Tìm NCC...', onChanged: (v) => setState(() => _suppSearch = v)),
+          if (_suppSearch.isNotEmpty) AppClearFilterChip(onTap: () => setState(() => _suppSearch = '')),
         ]),
         Expanded(
           child: suppliers.isEmpty
@@ -3116,112 +3375,8 @@ class _EmptyMsg extends StatelessWidget {
   }
 }
 
-class _SearchBox extends StatefulWidget {
-  final String hint;
-  final ValueChanged<String> onChanged;
-  const _SearchBox({required this.hint, required this.onChanged});
-  @override
-  State<_SearchBox> createState() => _SearchBoxState();
-}
-
-class _SearchBoxState extends State<_SearchBox> {
-  final _ctrl = TextEditingController();
-  bool _hasText = false;
-
-  @override
-  void dispose() { _ctrl.dispose(); super.dispose(); }
-
-  @override
-  Widget build(BuildContext context) {
-    return SizedBox(
-      width: 200,
-      height: 34,
-      child: TextField(
-        controller: _ctrl,
-        onChanged: (v) {
-          widget.onChanged(v);
-          if (v.isNotEmpty != _hasText) setState(() => _hasText = v.isNotEmpty);
-        },
-        style: const TextStyle(fontSize: 13),
-        decoration: InputDecoration(
-          hintText: widget.hint,
-          hintStyle: const TextStyle(fontSize: 12),
-          prefixIcon: const Icon(Icons.search, size: 18),
-          suffixIcon: _hasText
-              ? GestureDetector(
-                  onTap: () { _ctrl.clear(); widget.onChanged(''); setState(() => _hasText = false); },
-                  child: const Icon(Icons.close, size: 16),
-                )
-              : null,
-          suffixIconConstraints: const BoxConstraints(minWidth: 32, minHeight: 20),
-          contentPadding: const EdgeInsets.symmetric(horizontal: 12),
-          border: OutlineInputBorder(borderRadius: BorderRadius.circular(20), borderSide: BorderSide(color: AppColors.border)),
-          enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(20), borderSide: BorderSide(color: AppColors.border)),
-          focusedBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(20), borderSide: const BorderSide(color: AppColors.primary)),
-          filled: true,
-          fillColor: AppColors.surfaceVariant,
-        ),
-      ),
-    );
-  }
-}
-
-class _DropFilter extends StatelessWidget {
-  final String value;
-  final Map<String, String> items;
-  final ValueChanged<String> onChanged;
-  const _DropFilter({required this.value, required this.items, required this.onChanged});
-  @override
-  Widget build(BuildContext context) {
-    final active = value != items.keys.first;
-    return Container(
-      height: 34,
-      padding: const EdgeInsets.symmetric(horizontal: 10),
-      decoration: BoxDecoration(
-        color: active ? AppColors.primary.withAlpha(20) : AppColors.surfaceVariant,
-        borderRadius: BorderRadius.circular(20),
-        border: Border.all(color: active ? AppColors.primary : AppColors.border),
-      ),
-      child: DropdownButtonHideUnderline(
-        child: DropdownButton<String>(
-          value: value,
-          isDense: true,
-          icon: Icon(Icons.arrow_drop_down, size: 18, color: active ? AppColors.primary : AppColors.textHint),
-          style: TextStyle(fontSize: 12, fontWeight: FontWeight.w500, color: active ? AppColors.primary : AppColors.textSecondary),
-          items: items.entries.map((e) => DropdownMenuItem(value: e.key, child: Text(e.value))).toList(),
-          onChanged: (v) { if (v != null) onChanged(v); },
-        ),
-      ),
-    );
-  }
-}
-
-class _ToggleChip extends StatelessWidget {
-  final String label;
-  final bool active;
-  final VoidCallback onTap;
-  final IconData? icon;
-  const _ToggleChip({required this.label, required this.active, required this.onTap, this.icon});
-  @override
-  Widget build(BuildContext context) {
-    return GestureDetector(
-      onTap: onTap,
-      child: AnimatedContainer(
-        duration: const Duration(milliseconds: 200),
-        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 7),
-        decoration: BoxDecoration(
-          color: active ? AppColors.error : AppColors.surfaceVariant,
-          borderRadius: BorderRadius.circular(20),
-          border: Border.all(color: active ? AppColors.error : AppColors.border),
-        ),
-        child: Row(mainAxisSize: MainAxisSize.min, children: [
-          if (icon != null) ...[Icon(icon!, size: 14, color: active ? Colors.white : AppColors.textSecondary), const SizedBox(width: 4)],
-          Text(label, style: TextStyle(color: active ? Colors.white : AppColors.textSecondary, fontWeight: active ? FontWeight.w600 : FontWeight.w400, fontSize: 13)),
-        ]),
-      ),
-    );
-  }
-}
+// Private filter widgets removed – using shared AppFilterBar, AppSearchBox,
+// AppDropMapFilter, AppToggleChip, AppClearFilterChip from shared_widgets.dart
 
 class _StatusBadge extends StatelessWidget {
   final String label;
@@ -3237,17 +3392,4 @@ class _StatusBadge extends StatelessWidget {
   }
 }
 
-class _ClearFilterChip extends StatelessWidget {
-  final VoidCallback onPressed;
-  const _ClearFilterChip({required this.onPressed});
-  @override
-  Widget build(BuildContext context) {
-    return ActionChip(
-      avatar: const Icon(Icons.clear, size: 14),
-      label: const Text('Xoá lọc', style: TextStyle(fontSize: 12)),
-      padding: EdgeInsets.zero,
-      visualDensity: VisualDensity.compact,
-      onPressed: onPressed,
-    );
-  }
-}
+// _ClearFilterChip removed – using AppClearFilterChip from shared_widgets.dart

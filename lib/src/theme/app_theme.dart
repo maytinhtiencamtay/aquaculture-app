@@ -73,9 +73,10 @@ class AppColors {
   );
 
   static const gradientSidebar = LinearGradient(
-    begin: Alignment.topCenter,
-    end: Alignment.bottomCenter,
-    colors: [Color(0xFF0E7490), Color(0xFF155E75)],
+    begin: Alignment.topLeft,
+    end: Alignment.bottomRight,
+    colors: [Color(0xFF0C6B80), Color(0xFF0F4C5C), Color(0xFF134E5E)],
+    stops: [0.0, 0.6, 1.0],
   );
 
   static const gradientSuccess = LinearGradient(

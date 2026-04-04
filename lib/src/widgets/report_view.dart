@@ -84,11 +84,12 @@ class _ReportViewState extends State<ReportView> with SingleTickerProviderStateM
 
   void _onTabChanged() {
     if (_tabCtrl.indexIsChanging) return; // ignore animation
+    setState(() {}); // rebuild category chips
     final idx = _tabCtrl.index;
-    if (idx == 6 && !_profitLoaded) {
+    if (idx == 8 && !_profitLoaded) {
       _profitLoaded = true;
       dp.loadProfitAnalysis();
-    } else if (idx == 7 && !_supplierDebtLoaded) {
+    } else if (idx == 10 && !_supplierDebtLoaded) {
       _supplierDebtLoaded = true;
       dp.loadSupplierDebts();
     }
@@ -108,16 +109,16 @@ class _ReportViewState extends State<ReportView> with SingleTickerProviderStateM
       case 0: _exportOverview();
       case 1: _exportWater();
       case 2: _exportBatches();
-      case 3: _exportProducts();
-      case 4: _exportCustomers();
-      case 5: _exportRevenue();
-      case 6: _exportProfit();
-      case 7: _exportSupplierDebt();
-      case 8: _exportCashBook();
-      case 9: _exportFeed();
-      case 10: _exportGrowth();
-      case 11: _exportMortality();
-      case 12: _exportDisease();
+      case 3: _exportFeed();
+      case 4: _exportGrowth();
+      case 5: _exportMortality();
+      case 6: _exportDisease();
+      case 7: _exportRevenue();
+      case 8: _exportProfit();
+      case 9: _exportCustomers();
+      case 10: _exportSupplierDebt();
+      case 11: _exportCashBook();
+      case 12: _exportProducts();
       case 13: _exportStockIO();
       case 14: _exportStaff();
       default: _exportAll();
@@ -409,15 +410,7 @@ class _ReportViewState extends State<ReportView> with SingleTickerProviderStateM
     return d != null && !d.isBefore(cutoff);
   }
 
-  Widget _buildFilterBar(List<Widget> children) {
-    return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
-      child: SingleChildScrollView(
-        scrollDirection: Axis.horizontal,
-        child: Row(children: children),
-      ),
-    );
-  }
+  // Removed _buildFilterBar — using AppFilterBar from shared_widgets
 
   @override
   Widget build(BuildContext context) {
@@ -426,42 +419,79 @@ class _ReportViewState extends State<ReportView> with SingleTickerProviderStateM
       key: _captureKey,
       child: Column(
       children: [
-        // Header
+        // ── Header ──
         Padding(
-          padding: const EdgeInsets.fromLTRB(AppSpace.lg, AppSpace.lg, AppSpace.lg, AppSpace.sm),
+          padding: const EdgeInsets.fromLTRB(20, 16, 20, 0),
           child: Row(
             children: [
               Container(
                 padding: const EdgeInsets.all(10),
-                decoration: BoxDecoration(color: AppColors.kpiPrimary, borderRadius: BorderRadius.circular(AppSizes.borderRadius)),
+                decoration: BoxDecoration(
+                  gradient: const LinearGradient(colors: [Color(0xFF3B82F6), Color(0xFF6366F1)]),
+                  borderRadius: BorderRadius.circular(12),
+                  boxShadow: [BoxShadow(color: const Color(0xFF3B82F6).withAlpha(40), blurRadius: 8, offset: const Offset(0, 2))],
+                ),
                 child: const Icon(Icons.bar_chart_rounded, color: Colors.white, size: 22),
               ),
-              const SizedBox(width: AppSpace.md),
+              const SizedBox(width: 12),
               Expanded(
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Text('Báo cáo tổng hợp', style: AppText.title.copyWith(fontSize: 18)),
-                    Text('Dashboard & Bảng dữ liệu chi tiết', style: AppText.body.copyWith(color: AppColors.textSecondary)),
+                    const SizedBox(height: 2),
+                    Text('Dashboard & Bảng dữ liệu chi tiết', style: AppText.body.copyWith(color: AppColors.textSecondary, fontSize: 12)),
                   ],
                 ),
               ),
-              IconButton(
-                icon: const ExcelIcon(size: 20),
-                tooltip: 'Xuất Excel',
-                onPressed: _exportExcel,
-              ),
-              IconButton(
-                icon: const Icon(Icons.image_outlined, size: 20),
-                tooltip: 'Chụp ảnh PNG',
-                onPressed: _exportPng,
-                style: IconButton.styleFrom(foregroundColor: AppColors.primary),
-              ),
+              _headerAction(Icons.table_chart_outlined, 'Excel', _exportExcel),
+              const SizedBox(width: 4),
+              _headerAction(Icons.image_outlined, 'PNG', _exportPng),
             ],
           ),
         ),
-        const SizedBox(height: 4),
-        // Tab bar
+        const SizedBox(height: 12),
+
+        // ── Category chips ──
+        SizedBox(
+          height: 34,
+          child: ListView(
+            scrollDirection: Axis.horizontal,
+            padding: const EdgeInsets.symmetric(horizontal: 16),
+            children: List.generate(_categoryLabels.length, (i) {
+              final active = _activeCategory == i;
+              return Padding(
+                padding: EdgeInsets.only(right: i < _categoryLabels.length - 1 ? 8 : 0),
+                child: GestureDetector(
+                  onTap: () => _tabCtrl.animateTo(_categoryStartTab[i]),
+                  child: AnimatedContainer(
+                    duration: const Duration(milliseconds: 200),
+                    padding: const EdgeInsets.symmetric(horizontal: 14),
+                    decoration: BoxDecoration(
+                      color: active ? _categoryColors[i].withAlpha(15) : Colors.transparent,
+                      borderRadius: BorderRadius.circular(20),
+                      border: Border.all(color: active ? _categoryColors[i] : AppColors.border, width: active ? 1.5 : 1),
+                    ),
+                    child: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Icon(_categoryIcons[i], size: 14, color: active ? _categoryColors[i] : AppColors.textHint),
+                        const SizedBox(width: 6),
+                        Text(_categoryLabels[i], style: TextStyle(
+                          fontSize: 12, fontWeight: active ? FontWeight.w600 : FontWeight.w400,
+                          color: active ? _categoryColors[i] : AppColors.textSecondary,
+                        )),
+                      ],
+                    ),
+                  ),
+                ),
+              );
+            }),
+          ),
+        ),
+        const SizedBox(height: 8),
+
+        // ── Tab bar ──
         Container(
           margin: const EdgeInsets.symmetric(horizontal: 16),
           decoration: BoxDecoration(color: AppColors.surfaceVariant, borderRadius: BorderRadius.circular(12)),
@@ -469,8 +499,8 @@ class _ReportViewState extends State<ReportView> with SingleTickerProviderStateM
             controller: _tabCtrl,
             isScrollable: true,
             padding: const EdgeInsets.all(4),
-            labelStyle: const TextStyle(fontWeight: FontWeight.w600, fontSize: 13),
-            unselectedLabelStyle: const TextStyle(fontWeight: FontWeight.w400, fontSize: 13),
+            labelStyle: const TextStyle(fontWeight: FontWeight.w600, fontSize: 12.5),
+            unselectedLabelStyle: const TextStyle(fontWeight: FontWeight.w400, fontSize: 12.5),
             indicator: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(10), boxShadow: [BoxShadow(color: Colors.black.withAlpha(10), blurRadius: 4)]),
             indicatorSize: TabBarIndicatorSize.tab,
             labelColor: AppColors.primary,
@@ -478,19 +508,23 @@ class _ReportViewState extends State<ReportView> with SingleTickerProviderStateM
             dividerHeight: 0,
             tabAlignment: TabAlignment.start,
             tabs: [
+              // ★ Tổng quan
               Tab(child: _tl(Icons.dashboard_rounded, 'Tổng quan')),
-              Tab(child: _tl(Icons.water_drop_rounded, 'Thông số nước')),
+              // 🐟 Nuôi trồng
+              Tab(child: _tlSep(Icons.water_drop_rounded, 'Nước')),
               Tab(child: _tl(Icons.set_meal_rounded, 'Lô cá')),
-              Tab(child: _tl(Icons.inventory_2_rounded, 'Hàng hóa')),
-              Tab(child: _tl(Icons.people_rounded, 'Khách hàng')),
-              Tab(child: _tl(Icons.monetization_on_rounded, 'Doanh thu & LN')),
-              Tab(child: _tl(Icons.analytics_rounded, 'Lãi/Lỗ')),
-              Tab(child: _tl(Icons.account_balance_wallet_rounded, 'Nợ NCC')),
-              Tab(child: _tl(Icons.menu_book_rounded, 'Sổ quỹ')),
               Tab(child: _tl(Icons.restaurant_rounded, 'Thức ăn')),
               Tab(child: _tl(Icons.trending_up_rounded, 'Tăng trưởng')),
               Tab(child: _tl(Icons.heart_broken_rounded, 'Hao hụt')),
               Tab(child: _tl(Icons.coronavirus_rounded, 'Bệnh & ĐT')),
+              // 💰 Kinh doanh
+              Tab(child: _tlSep(Icons.monetization_on_rounded, 'Doanh thu')),
+              Tab(child: _tl(Icons.analytics_rounded, 'Lãi/Lỗ')),
+              Tab(child: _tl(Icons.people_rounded, 'Khách hàng')),
+              Tab(child: _tl(Icons.account_balance_wallet_rounded, 'Nợ NCC')),
+              // 📋 Quản lý
+              Tab(child: _tlSep(Icons.menu_book_rounded, 'Sổ quỹ')),
+              Tab(child: _tl(Icons.inventory_2_rounded, 'Hàng hóa')),
               Tab(child: _tl(Icons.swap_horiz_rounded, 'Nhập/Xuất kho')),
               Tab(child: _tl(Icons.groups_rounded, 'Nhân sự')),
             ],
@@ -501,21 +535,21 @@ class _ReportViewState extends State<ReportView> with SingleTickerProviderStateM
           child: TabBarView(
             controller: _tabCtrl,
             children: [
-              _buildOverviewTab(),
-              _buildWaterTab(),
-              _buildBatchTab(),
-              _buildProductTab(),
-              _buildCustomerTab(),
-              _buildRevenueTab(),
-              _buildProfitTab(),
-              _buildSupplierDebtTab(),
-              _buildCashBookTab(),
-              _buildFeedTab(),
-              _buildGrowthTab(),
-              _buildMortalityTab(),
-              _buildDiseaseTab(),
-              _buildStockIOTab(),
-              _buildStaffTab(),
+              _buildOverviewTab(),    // 0  (was 0)
+              _buildWaterTab(),       // 1  (was 1)
+              _buildBatchTab(),       // 2  (was 2)
+              _buildFeedTab(),        // 3  (was 9)
+              _buildGrowthTab(),      // 4  (was 10)
+              _buildMortalityTab(),   // 5  (was 11)
+              _buildDiseaseTab(),     // 6  (was 12)
+              _buildRevenueTab(),     // 7  (was 5)
+              _buildProfitTab(),      // 8  (was 6)
+              _buildCustomerTab(),    // 9  (was 4)
+              _buildSupplierDebtTab(),// 10 (was 7)
+              _buildCashBookTab(),    // 11 (was 8)
+              _buildProductTab(),     // 12 (was 3)
+              _buildStockIOTab(),     // 13 (was 13)
+              _buildStaffTab(),       // 14 (was 14)
             ],
           ),
         ),
@@ -524,7 +558,44 @@ class _ReportViewState extends State<ReportView> with SingleTickerProviderStateM
     );
   }
 
-  Widget _tl(IconData ic, String t) => Row(mainAxisSize: MainAxisSize.min, children: [Icon(ic, size: 16), const SizedBox(width: 6), Text(t)]);
+  // ── Category navigation data ──
+  static const _categoryLabels = ['Tổng quan', 'Nuôi trồng', 'Kinh doanh', 'Quản lý'];
+  static const _categoryIcons = [Icons.dashboard_rounded, Icons.water_rounded, Icons.monetization_on_rounded, Icons.settings_rounded];
+  static const _categoryColors = [Color(0xFF3B82F6), Color(0xFF10B981), Color(0xFFF59E0B), Color(0xFF8B5CF6)];
+  static const _categoryStartTab = [0, 1, 7, 11];
+  int get _activeCategory {
+    final idx = _tabCtrl.index;
+    if (idx >= 11) return 3;
+    if (idx >= 7) return 2;
+    if (idx >= 1) return 1;
+    return 0;
+  }
+
+  Widget _tl(IconData ic, String t) => Row(mainAxisSize: MainAxisSize.min, children: [Icon(ic, size: 15), const SizedBox(width: 5), Text(t)]);
+  /// Tab label with left separator dot (first tab of a group)
+  Widget _tlSep(IconData ic, String t) => Row(mainAxisSize: MainAxisSize.min, children: [
+    Container(width: 3, height: 3, margin: const EdgeInsets.only(right: 8), decoration: const BoxDecoration(color: AppColors.textHint, shape: BoxShape.circle)),
+    Icon(ic, size: 15), const SizedBox(width: 5), Text(t),
+  ]);
+  /// Header action button
+  Widget _headerAction(IconData icon, String label, VoidCallback onTap) {
+    return InkWell(
+      onTap: onTap,
+      borderRadius: BorderRadius.circular(8),
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+        decoration: BoxDecoration(
+          border: Border.all(color: AppColors.border),
+          borderRadius: BorderRadius.circular(8),
+        ),
+        child: Row(mainAxisSize: MainAxisSize.min, children: [
+          Icon(icon, size: 16, color: AppColors.textSecondary),
+          const SizedBox(width: 4),
+          Text(label, style: const TextStyle(fontSize: 11, fontWeight: FontWeight.w500, color: AppColors.textSecondary)),
+        ]),
+      ),
+    );
+  }
 
   // ═══════════════════════════════════════════════════════════════════
   // TAB 1: TỔNG QUAN DASHBOARD
@@ -600,17 +671,13 @@ class _ReportViewState extends State<ReportView> with SingleTickerProviderStateM
         const SizedBox(height: 8),
         kpiRow([
           _kpiCard('Ao nuôi', '${dp.activePonds}/${dp.ponds.length}', Icons.water_rounded, AppColors.primary, subtitle: '${dp.inactivePonds} trống'),
-          const SizedBox(width: 8),
           _kpiCard('Lô cá', '${dp.activeBatches}', Icons.set_meal_rounded, AppColors.success, subtitle: '${dp.fishBatches.where((b) => b.status == 'harvested').length} đã thu hoạch'),
-          const SizedBox(width: 8),
           _kpiCard('Sinh khối', '${_nFmt.format(totalBiomassKg)} kg', Icons.scale_rounded, const Color(0xFF8B5CF6), subtitle: totalBiomassKg >= 1000 ? '≈ ${_nFmt.format(totalBiomassKg / 1000)} tấn' : null),
         ]),
         const SizedBox(height: 8),
         kpiRow([
           _kpiCard('Tỷ lệ sống TB', '${avgSurvivalRate.toStringAsFixed(1)}%', Icons.favorite_rounded, avgSurvivalRate >= 80 ? AppColors.success : (avgSurvivalRate >= 60 ? AppColors.warning : AppColors.error)),
-          const SizedBox(width: 8),
           _kpiCard('FCR TB', avgFcr > 0 ? avgFcr.toStringAsFixed(2) : '—', Icons.restaurant_rounded, avgFcr > 0 && avgFcr <= 1.5 ? AppColors.success : (avgFcr <= 2.0 ? AppColors.warning : AppColors.error)),
-          const SizedBox(width: 8),
           _kpiCard('Loài nuôi', '${dp.species.length}', Icons.eco_rounded, const Color(0xFF059669)),
         ]),
 
@@ -640,7 +707,6 @@ class _ReportViewState extends State<ReportView> with SingleTickerProviderStateM
 
         kpiRow([
           _kpiCard('Doanh thu bán', '${_cFmt.format(totalRevenue)}đ', Icons.trending_up_rounded, AppColors.success, subtitle: '${completedSales.length} đơn hoàn thành'),
-          const SizedBox(width: 8),
           _kpiCard('Chi phí mua', '${_cFmt.format(totalCost)}đ', Icons.shopping_cart_rounded, AppColors.error, subtitle: '${completedPurchases.length} đơn đã nhập'),
         ]),
         const SizedBox(height: 8),
@@ -651,8 +717,7 @@ class _ReportViewState extends State<ReportView> with SingleTickerProviderStateM
           decoration: BoxDecoration(color: AppColors.surfaceVariant, borderRadius: BorderRadius.circular(12)),
           child: Row(children: [
             const Icon(Icons.calendar_month_rounded, size: 18, color: AppColors.textSecondary),
-            const SizedBox(width: 8),
-            Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+              Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
               Text('Doanh thu T${now.month}', style: const TextStyle(fontSize: 12, color: AppColors.textSecondary)),
               Text('${_cFmt.format(salesThisMonth)}đ', style: const TextStyle(fontSize: 15, fontWeight: FontWeight.w700)),
             ])),
@@ -663,8 +728,7 @@ class _ReportViewState extends State<ReportView> with SingleTickerProviderStateM
               Text('${_cFmt.format(salesPrevMonth)}đ', style: const TextStyle(fontSize: 15, fontWeight: FontWeight.w700)),
             ])),
             if (salesPrevMonth > 0) ...[
-              const SizedBox(width: 8),
-              _growthBadge(salesThisMonth, salesPrevMonth),
+                  _growthBadge(salesThisMonth, salesPrevMonth),
             ],
           ]),
         ),
@@ -673,9 +737,7 @@ class _ReportViewState extends State<ReportView> with SingleTickerProviderStateM
         // Cash flow
         kpiRow([
           _kpiCard('Số dư quỹ', '${_cFmt.format(cashBalance)}đ', Icons.account_balance_rounded, cashBalance >= 0 ? const Color(0xFF059669) : AppColors.error),
-          const SizedBox(width: 8),
           _kpiCard('Thu thực tế', '${_cFmt.format(cashIn)}đ', Icons.arrow_downward_rounded, const Color(0xFF10B981)),
-          const SizedBox(width: 8),
           _kpiCard('Chi thực tế', '${_cFmt.format(cashOut)}đ', Icons.arrow_upward_rounded, const Color(0xFFEF4444)),
         ]),
 
@@ -793,18 +855,18 @@ class _ReportViewState extends State<ReportView> with SingleTickerProviderStateM
             _alertCard(Icons.inventory_2_rounded, 'Tồn kho', [
               if (outOfStock > 0) '$outOfStock sản phẩm hết hàng!',
               if (lowStock > 0) '$lowStock sản phẩm sắp hết',
-            ], outOfStock > 0 ? AppColors.error : AppColors.warning, onTap: () => _tabCtrl.animateTo(3)),
+            ], outOfStock > 0 ? AppColors.error : AppColors.warning, onTap: () => _tabCtrl.animateTo(12)),
 
           // Debt alerts
           if (dp.totalDebt > 0)
             _alertCard(Icons.person_pin_rounded, 'Công nợ khách hàng', [
               '${dp.customers.where((c) => c.debt > 0).length} khách còn nợ: ${_cFmt.format(dp.totalDebt)}đ',
-            ], AppColors.warning, onTap: () => _tabCtrl.animateTo(4)),
+            ], AppColors.warning, onTap: () => _tabCtrl.animateTo(9)),
 
           if (dp.totalSupplierDebt > 0)
             _alertCard(Icons.local_shipping_rounded, 'Nợ nhà cung cấp', [
               'Tổng nợ NCC: ${_cFmt.format(dp.totalSupplierDebt)}đ',
-            ], AppColors.error, onTap: () => _tabCtrl.animateTo(7)),
+            ], AppColors.error, onTap: () => _tabCtrl.animateTo(10)),
 
           const SizedBox(height: 18),
         ],
@@ -851,7 +913,7 @@ class _ReportViewState extends State<ReportView> with SingleTickerProviderStateM
     ]);
   }
 
-  Widget _kpiCard(String title, String value, IconData icon, Color color, {String? subtitle}) {
+  Widget _kpiCard(String title, String value, IconData? icon, Color color, {String? subtitle}) {
     return Expanded(
       child: Container(
         padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
@@ -861,11 +923,14 @@ class _ReportViewState extends State<ReportView> with SingleTickerProviderStateM
           border: Border.all(color: color.withAlpha(30)),
         ),
         child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-          Row(children: [
-            Icon(icon, size: 15, color: color.withAlpha(180)),
-            const SizedBox(width: 5),
-            Flexible(child: Text(title, style: TextStyle(fontSize: 11, color: color.withAlpha(180), fontWeight: FontWeight.w500), overflow: TextOverflow.ellipsis)),
-          ]),
+          if (icon != null)
+            Row(children: [
+              Icon(icon, size: 15, color: color.withAlpha(180)),
+              const SizedBox(width: 4),
+              Flexible(child: Text(title, style: TextStyle(fontSize: 11, color: color.withAlpha(180), fontWeight: FontWeight.w500), overflow: TextOverflow.ellipsis)),
+            ])
+          else
+            Text(title, style: TextStyle(fontSize: 11, color: color.withAlpha(180), fontWeight: FontWeight.w500), overflow: TextOverflow.ellipsis),
           const SizedBox(height: 4),
           FittedBox(fit: BoxFit.scaleDown, alignment: Alignment.centerLeft, child: Text(value, style: TextStyle(fontSize: 15, fontWeight: FontWeight.w800, color: color))),
           if (subtitle != null) ...[
@@ -929,7 +994,6 @@ class _ReportViewState extends State<ReportView> with SingleTickerProviderStateM
         padding: const EdgeInsets.symmetric(vertical: 6),
         child: Row(children: [
           Icon(icon, size: 16, color: color),
-          const SizedBox(width: 6),
           Expanded(child: Text(label, style: const TextStyle(fontSize: 12, color: AppColors.textSecondary))),
           Text(value, style: TextStyle(fontSize: 13, fontWeight: FontWeight.w700, color: color)),
         ]),
@@ -987,23 +1051,19 @@ class _ReportViewState extends State<ReportView> with SingleTickerProviderStateM
           padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
           child: Row(
             children: [
-              _WaterKpi('pH TB', avgPh.toStringAsFixed(1), _phColor(avgPh)),
-              const SizedBox(width: 8),
-              _WaterKpi('DO TB', '${avgDo.toStringAsFixed(1)} mg/L', _doColor(avgDo)),
-              const SizedBox(width: 8),
-              _WaterKpi('Nhiệt độ TB', '${avgTemp.toStringAsFixed(1)}°C', AppColors.info),
-              const SizedBox(width: 8),
-              _WaterKpi('NH₃ TB', '${avgNh3.toStringAsFixed(3)} mg/L', _nh3Color(avgNh3)),
+              _kpiCard('pH TB', avgPh.toStringAsFixed(1), null, _phColor(avgPh)),
+                  _kpiCard('DO TB', '${avgDo.toStringAsFixed(1)} mg/L', null, _doColor(avgDo)),
+                  _kpiCard('Nhiệt độ TB', '${avgTemp.toStringAsFixed(1)}°C', null, AppColors.info),
+                  _kpiCard('NH₃ TB', '${avgNh3.toStringAsFixed(3)} mg/L', null, _nh3Color(avgNh3)),
             ],
           ),
         ),
         const SizedBox(height: 4),
         // Filter bar
-        _buildFilterBar([
-          _DropChip(value: _waterStatus, items: const {'all': 'TT Ao', 'active': 'Đang nuôi', 'empty': 'Trống', 'maintenance': 'Bảo trì'}, onChanged: (v) => setState(() => _waterStatus = v)),
-          const SizedBox(width: 8),
-          _DropChip(value: _waterQuality, items: const {'all': 'Chất lượng', 'good': 'Tốt', 'warning': 'Cảnh báo', 'danger': 'Nguy hiểm'}, onChanged: (v) => setState(() => _waterQuality = v)),
-          if (hasWaterFilter) ...[const SizedBox(width: 8), _ClearChip(onTap: () => setState(() { _waterStatus = 'all'; _waterQuality = 'all'; }))],
+        AppFilterBar(children: [
+          AppDropMapFilter(value: _waterStatus, items: const {'all': 'TT Ao', 'active': 'Đang nuôi', 'empty': 'Trống', 'maintenance': 'Bảo trì'}, onChanged: (v) => setState(() => _waterStatus = v)),
+          AppDropMapFilter(value: _waterQuality, items: const {'all': 'Chất lượng', 'good': 'Tốt', 'warning': 'Cảnh báo', 'danger': 'Nguy hiểm'}, onChanged: (v) => setState(() => _waterQuality = v)),
+          if (hasWaterFilter) ...[const SizedBox(width: 8), AppClearFilterChip(onTap: () => setState(() { _waterStatus = 'all'; _waterQuality = 'all'; }))],
         ]),
         // Table header
         _TableHeader(title: 'Bảng thông số nước (${allPonds.length} ao)'),
@@ -1084,13 +1144,10 @@ class _ReportViewState extends State<ReportView> with SingleTickerProviderStateM
           padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
           child: Row(
             children: [
-              _WaterKpi('Đang nuôi', '${active.length} lô', AppColors.primary),
-              const SizedBox(width: 8),
-              _WaterKpi('Tổng cá', _cFmt.format(totalQty), AppColors.info),
-              const SizedBox(width: 8),
-              _WaterKpi('Sinh khối', '${_nFmt.format(totalBiomass)} kg', AppColors.success),
-              const SizedBox(width: 8),
-              _WaterKpi('FCR TB', avgFcr.toStringAsFixed(2), avgFcr > 2 ? AppColors.warning : AppColors.success),
+              _kpiCard('Đang nuôi', '${active.length} lô', null, AppColors.primary),
+                  _kpiCard('Tổng cá', _cFmt.format(totalQty), null, AppColors.info),
+                  _kpiCard('Sinh khối', '${_nFmt.format(totalBiomass)} kg', null, AppColors.success),
+                  _kpiCard('FCR TB', avgFcr.toStringAsFixed(2), null, avgFcr > 2 ? AppColors.warning : AppColors.success),
             ],
           ),
         ),
@@ -1099,21 +1156,18 @@ class _ReportViewState extends State<ReportView> with SingleTickerProviderStateM
           padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
           child: Row(
             children: [
-              _WaterKpi('Tỷ lệ sống TB', '${avgSurvival.toStringAsFixed(1)}%', avgSurvival < 80 ? AppColors.warning : AppColors.success),
-              const SizedBox(width: 8),
-              _WaterKpi('Đã thu hoạch', '$harvestedCount lô', AppColors.secondary),
-              const SizedBox(width: 8),
-              _WaterKpi('Thức ăn tiêu thụ', '${_nFmt.format(active.fold(0.0, (s, b) => s + b.feedConsumed))} kg', AppColors.info),
+              _kpiCard('Tỷ lệ sống TB', '${avgSurvival.toStringAsFixed(1)}%', null, avgSurvival < 80 ? AppColors.warning : AppColors.success),
+                  _kpiCard('Đã thu hoạch', '$harvestedCount lô', null, AppColors.secondary),
+                  _kpiCard('Thức ăn tiêu thụ', '${_nFmt.format(active.fold(0.0, (s, b) => s + b.feedConsumed))} kg', null, AppColors.info),
             ],
           ),
         ),
         const SizedBox(height: 4),
         // Filter bar
-        _buildFilterBar([
-          _DropChip(value: _batchPeriod, items: _periodItems, onChanged: (v) => setState(() => _batchPeriod = v)),
-          const SizedBox(width: 6),
-          _DropChip(value: _batchStatus, items: const {'all': 'Trạng thái', 'active': 'Đang nuôi', 'harvested': 'Đã thu hoạch', 'transferred': 'Đã chuyển', 'closed': 'Đã đóng'}, onChanged: (v) => setState(() => _batchStatus = v)),
-          if (_batchStatus != 'all' || _batchPeriod != 'all') ...[const SizedBox(width: 8), _ClearChip(onTap: () => setState(() { _batchStatus = 'all'; _batchPeriod = 'all'; }))],
+        AppFilterBar(children: [
+          AppDropMapFilter(value: _batchPeriod, items: _periodItems, onChanged: (v) => setState(() => _batchPeriod = v)),
+          AppDropMapFilter(value: _batchStatus, items: const {'all': 'Trạng thái', 'active': 'Đang nuôi', 'harvested': 'Đã thu hoạch', 'transferred': 'Đã chuyển', 'closed': 'Đã đóng'}, onChanged: (v) => setState(() => _batchStatus = v)),
+          if (_batchStatus != 'all' || _batchPeriod != 'all') ...[const SizedBox(width: 8), AppClearFilterChip(onTap: () => setState(() { _batchStatus = 'all'; _batchPeriod = 'all'; }))],
         ]),
         _TableHeader(title: 'Bảng lô cá (${batches.length} lô)'),
         Expanded(
@@ -1181,13 +1235,10 @@ class _ReportViewState extends State<ReportView> with SingleTickerProviderStateM
           padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
           child: Row(
             children: [
-              _WaterKpi('Tổng SP', '${products.length}', AppColors.primary),
-              const SizedBox(width: 8),
-              _WaterKpi('Sắp hết hàng', '${lowStock.length}', lowStock.isNotEmpty ? AppColors.error : AppColors.success),
-              const SizedBox(width: 8),
-              _WaterKpi('Giá trị kho', '${_cFmt.format(totalValue)}đ', AppColors.info),
-              const SizedBox(width: 8),
-              _WaterKpi('Danh mục', '${categoryMap.length}', AppColors.secondary),
+              _kpiCard('Tổng SP', '${products.length}', null, AppColors.primary),
+                  _kpiCard('Sắp hết hàng', '${lowStock.length}', null, lowStock.isNotEmpty ? AppColors.error : AppColors.success),
+                  _kpiCard('Giá trị kho', '${_cFmt.format(totalValue)}đ', null, AppColors.info),
+                  _kpiCard('Danh mục', '${categoryMap.length}', null, AppColors.secondary),
             ],
           ),
         ),
@@ -1218,8 +1269,7 @@ class _ReportViewState extends State<ReportView> with SingleTickerProviderStateM
                                 child: LinearProgressIndicator(value: pct / 100, backgroundColor: AppColors.surfaceVariant, color: AppColors.primary.withAlpha(180), minHeight: 6),
                               ),
                             ),
-                            const SizedBox(width: 8),
-                            Text('${e.value} (${pct.toStringAsFixed(0)}%)', style: const TextStyle(fontSize: 11, fontWeight: FontWeight.w600)),
+                                              Text('${e.value} (${pct.toStringAsFixed(0)}%)', style: const TextStyle(fontSize: 11, fontWeight: FontWeight.w600)),
                           ],
                         ),
                       );
@@ -1230,11 +1280,10 @@ class _ReportViewState extends State<ReportView> with SingleTickerProviderStateM
             ),
           ),
         // Filter bar
-        _buildFilterBar([
-          _DropChip(value: _prodCategory, items: const {'all': 'Danh mục', 'feed': 'Thức ăn', 'seed': 'Giống', 'chemical': 'Vi sinh/HChất', 'medicine': 'Thuốc', 'accessory': 'Phụ kiện', 'tool': 'Dụng cụ'}, onChanged: (v) => setState(() => _prodCategory = v)),
-          const SizedBox(width: 8),
-          _ToggleChip(label: 'Sắp hết', active: _prodLowStock, color: AppColors.error, onTap: () => setState(() => _prodLowStock = !_prodLowStock)),
-          if (hasProdFilter) ...[const SizedBox(width: 8), _ClearChip(onTap: () => setState(() { _prodCategory = 'all'; _prodLowStock = false; }))],
+        AppFilterBar(children: [
+          AppDropMapFilter(value: _prodCategory, items: const {'all': 'Danh mục', 'feed': 'Thức ăn', 'seed': 'Giống', 'chemical': 'Vi sinh/HChất', 'medicine': 'Thuốc', 'accessory': 'Phụ kiện', 'tool': 'Dụng cụ'}, onChanged: (v) => setState(() => _prodCategory = v)),
+          AppToggleChip(label: 'Sắp hết', active: _prodLowStock, activeColor: AppColors.error, onTap: () => setState(() => _prodLowStock = !_prodLowStock)),
+          if (hasProdFilter) ...[const SizedBox(width: 8), AppClearFilterChip(onTap: () => setState(() { _prodCategory = 'all'; _prodLowStock = false; }))],
         ]),
         _TableHeader(title: 'Bảng hàng hóa (${products.length} sản phẩm)'),
         Expanded(
@@ -1309,23 +1358,19 @@ class _ReportViewState extends State<ReportView> with SingleTickerProviderStateM
           padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
           child: Row(
             children: [
-              _WaterKpi('Tổng KH', '$totalCustomers', AppColors.primary),
-              const SizedBox(width: 8),
-              _WaterKpi('Đại lý', '$wholesale', AppColors.info),
-              const SizedBox(width: 8),
-              _WaterKpi('Khách lẻ', '$retail', AppColors.secondary),
-              const SizedBox(width: 8),
-              _WaterKpi('Công nợ', '${_cFmt.format(totalDebt)}đ', withDebt > 0 ? AppColors.error : AppColors.success),
+              _kpiCard('Tổng KH', '$totalCustomers', null, AppColors.primary),
+                  _kpiCard('Đại lý', '$wholesale', null, AppColors.info),
+                  _kpiCard('Khách lẻ', '$retail', null, AppColors.secondary),
+                  _kpiCard('Công nợ', '${_cFmt.format(totalDebt)}đ', null, withDebt > 0 ? AppColors.error : AppColors.success),
             ],
           ),
         ),
         const SizedBox(height: 4),
         // Filter bar
-        _buildFilterBar([
-          _DropChip(value: _custType, items: const {'all': 'Loại KH', 'wholesale': 'Đại lý', 'retail': 'Khách lẻ'}, onChanged: (v) => setState(() => _custType = v)),
-          const SizedBox(width: 8),
-          _ToggleChip(label: 'Có công nợ', active: _custDebtOnly, color: AppColors.error, onTap: () => setState(() => _custDebtOnly = !_custDebtOnly)),
-          if (hasCustFilter) ...[const SizedBox(width: 8), _ClearChip(onTap: () => setState(() { _custType = 'all'; _custDebtOnly = false; }))],
+        AppFilterBar(children: [
+          AppDropMapFilter(value: _custType, items: const {'all': 'Loại KH', 'wholesale': 'Đại lý', 'retail': 'Khách lẻ'}, onChanged: (v) => setState(() => _custType = v)),
+          AppToggleChip(label: 'Có công nợ', active: _custDebtOnly, activeColor: AppColors.error, onTap: () => setState(() => _custDebtOnly = !_custDebtOnly)),
+          if (hasCustFilter) ...[const SizedBox(width: 8), AppClearFilterChip(onTap: () => setState(() { _custType = 'all'; _custDebtOnly = false; }))],
         ]),
         // Top customers
         if (customerRevenue.isNotEmpty)
@@ -1393,8 +1438,7 @@ class _ReportViewState extends State<ReportView> with SingleTickerProviderStateM
                 child: LinearProgressIndicator(value: e.value / maxVal, backgroundColor: AppColors.surfaceVariant, color: AppColors.success.withAlpha(180), minHeight: 6),
               ),
             ),
-            const SizedBox(width: 8),
-            Text('${_cFmt.format(e.value)}đ', style: const TextStyle(fontSize: 11, fontWeight: FontWeight.w600)),
+              Text('${_cFmt.format(e.value)}đ', style: const TextStyle(fontSize: 11, fontWeight: FontWeight.w600)),
           ],
         ),
       );
@@ -1458,35 +1502,28 @@ class _ReportViewState extends State<ReportView> with SingleTickerProviderStateM
         // KPI Row
         Row(
           children: [
-            Expanded(child: _MiniKpi('Doanh thu', '${_cFmt.format(totalRevenue)}đ', AppColors.success)),
-            const SizedBox(width: 8),
-            Expanded(child: _MiniKpi('Chi phí mua', '${_cFmt.format(totalCost)}đ', AppColors.error)),
-            const SizedBox(width: 8),
-            Expanded(child: _MiniKpi('LN gộp', '${_cFmt.format(grossProfit)}đ', grossProfit >= 0 ? AppColors.success : AppColors.error)),
-            const SizedBox(width: 8),
-            Expanded(child: _MiniKpi('Biên LN', '${margin.toStringAsFixed(1)}%', margin >= 20 ? AppColors.success : AppColors.warning)),
+            _kpiCard('Doanh thu', '${_cFmt.format(totalRevenue)}đ', null, AppColors.success),
+              _kpiCard('Chi phí mua', '${_cFmt.format(totalCost)}đ', null, AppColors.error),
+              _kpiCard('LN gộp', '${_cFmt.format(grossProfit)}đ', null, grossProfit >= 0 ? AppColors.success : AppColors.error),
+              _kpiCard('Biên LN', '${margin.toStringAsFixed(1)}%', null, margin >= 20 ? AppColors.success : AppColors.warning),
           ],
         ),
         const SizedBox(height: 10),
         Row(
           children: [
-            Expanded(child: _MiniKpi('Thu thực tế', '${_cFmt.format(totalIn)}đ', AppColors.success)),
-            const SizedBox(width: 8),
-            Expanded(child: _MiniKpi('Chi thực tế', '${_cFmt.format(totalOut)}đ', AppColors.error)),
-            const SizedBox(width: 8),
-            Expanded(child: _MiniKpi('Dòng tiền', '${_cFmt.format(cashFlow)}đ', cashFlow >= 0 ? AppColors.success : AppColors.error)),
-            const SizedBox(width: 8),
-            Expanded(child: _MiniKpi('Công nợ KH', '${_cFmt.format(dp.totalDebt)}đ', dp.totalDebt > 0 ? AppColors.warning : AppColors.success)),
+            _kpiCard('Thu thực tế', '${_cFmt.format(totalIn)}đ', null, AppColors.success),
+              _kpiCard('Chi thực tế', '${_cFmt.format(totalOut)}đ', null, AppColors.error),
+              _kpiCard('Dòng tiền', '${_cFmt.format(cashFlow)}đ', null, cashFlow >= 0 ? AppColors.success : AppColors.error),
+              _kpiCard('Công nợ KH', '${_cFmt.format(dp.totalDebt)}đ', null, dp.totalDebt > 0 ? AppColors.warning : AppColors.success),
           ],
         ),
         const SizedBox(height: 14),
 
         // Sale status filter (đưa lên trên thay vì ở cuối)
-        _buildFilterBar([
-          _DropChip(value: _salePeriod, items: _periodItems, onChanged: (v) => setState(() => _salePeriod = v)),
-          const SizedBox(width: 6),
-          _DropChip(value: _saleStatus, items: const {'all': 'Trạng thái', 'pending': 'Chờ xử lý', 'completed': 'Hoàn thành', 'cancelled': 'Đã huỷ'}, onChanged: (v) => setState(() => _saleStatus = v)),
-          if (hasSaleFilter) ...[const SizedBox(width: 8), _ClearChip(onTap: () => setState(() { _saleStatus = 'all'; _salePeriod = 'all'; }))],
+        AppFilterBar(children: [
+          AppDropMapFilter(value: _salePeriod, items: _periodItems, onChanged: (v) => setState(() => _salePeriod = v)),
+          AppDropMapFilter(value: _saleStatus, items: const {'all': 'Trạng thái', 'pending': 'Chờ xử lý', 'completed': 'Hoàn thành', 'cancelled': 'Đã huỷ'}, onChanged: (v) => setState(() => _saleStatus = v)),
+          if (hasSaleFilter) ...[const SizedBox(width: 8), AppClearFilterChip(onTap: () => setState(() { _saleStatus = 'all'; _salePeriod = 'all'; }))],
         ]),
         const SizedBox(height: 8),
 
@@ -1655,8 +1692,7 @@ class _ReportViewState extends State<ReportView> with SingleTickerProviderStateM
                                 child: Row(
                                   children: [
                                     Container(width: 10, height: 10, decoration: BoxDecoration(color: colors[entry.key % colors.length], borderRadius: BorderRadius.circular(2))),
-                                    const SizedBox(width: 6),
-                                    Expanded(child: Text(PaymentVoucher.categoryLabelFor(entry.value.key), style: const TextStyle(fontSize: 11), overflow: TextOverflow.ellipsis)),
+                                                              Expanded(child: Text(PaymentVoucher.categoryLabelFor(entry.value.key), style: const TextStyle(fontSize: 11), overflow: TextOverflow.ellipsis)),
                                     Text('${pct.toStringAsFixed(0)}%', style: const TextStyle(fontSize: 11, fontWeight: FontWeight.w600, color: AppColors.textSecondary)),
                                   ],
                                 ),
@@ -1706,8 +1742,7 @@ class _ReportViewState extends State<ReportView> with SingleTickerProviderStateM
                             children: [
                               const SizedBox(width: 50, child: Text('Thu', style: TextStyle(fontSize: 11, color: AppColors.textSecondary))),
                               Expanded(child: ClipRRect(borderRadius: BorderRadius.circular(3), child: LinearProgressIndicator(value: maxVal > 0 ? rev / maxVal : 0, backgroundColor: AppColors.surfaceVariant, color: AppColors.success, minHeight: 8))),
-                              const SizedBox(width: 8),
-                              SizedBox(width: 90, child: Text('${_cFmt.format(rev)}đ', style: const TextStyle(fontSize: 11), textAlign: TextAlign.right)),
+                                                  SizedBox(width: 90, child: Text('${_cFmt.format(rev)}đ', style: const TextStyle(fontSize: 11), textAlign: TextAlign.right)),
                             ],
                           ),
                           const SizedBox(height: 2),
@@ -1715,8 +1750,7 @@ class _ReportViewState extends State<ReportView> with SingleTickerProviderStateM
                             children: [
                               const SizedBox(width: 50, child: Text('Chi', style: TextStyle(fontSize: 11, color: AppColors.textSecondary))),
                               Expanded(child: ClipRRect(borderRadius: BorderRadius.circular(3), child: LinearProgressIndicator(value: maxVal > 0 ? cost / maxVal : 0, backgroundColor: AppColors.surfaceVariant, color: AppColors.error, minHeight: 8))),
-                              const SizedBox(width: 8),
-                              SizedBox(width: 90, child: Text('${_cFmt.format(cost)}đ', style: const TextStyle(fontSize: 11), textAlign: TextAlign.right)),
+                                                  SizedBox(width: 90, child: Text('${_cFmt.format(cost)}đ', style: const TextStyle(fontSize: 11), textAlign: TextAlign.right)),
                             ],
                           ),
                         ],
@@ -1748,10 +1782,8 @@ class _ReportViewState extends State<ReportView> with SingleTickerProviderStateM
                         children: [
                           SizedBox(width: 110, child: Text(PaymentVoucher.categoryLabelFor(e.key), style: const TextStyle(fontSize: 12))),
                           Expanded(child: ClipRRect(borderRadius: BorderRadius.circular(3), child: LinearProgressIndicator(value: pct / 100, backgroundColor: AppColors.surfaceVariant, color: AppColors.error.withAlpha(180), minHeight: 6))),
-                          const SizedBox(width: 8),
-                          Text('${_cFmt.format(e.value)}đ', style: const TextStyle(fontSize: 11, fontWeight: FontWeight.w600)),
-                          const SizedBox(width: 4),
-                          Text('(${pct.toStringAsFixed(0)}%)', style: const TextStyle(fontSize: 10, color: AppColors.textHint)),
+                                          Text('${_cFmt.format(e.value)}đ', style: const TextStyle(fontSize: 11, fontWeight: FontWeight.w600)),
+                                          Text('(${pct.toStringAsFixed(0)}%)', style: const TextStyle(fontSize: 10, color: AppColors.textHint)),
                         ],
                       ),
                     );
@@ -1883,24 +1915,19 @@ class _ReportViewState extends State<ReportView> with SingleTickerProviderStateM
 
     return Column(
       children: [
-        _buildFilterBar([
-          _DropChip(value: _feedPeriod, items: _periodItems, onChanged: (v) => setState(() => _feedPeriod = v)),
-          const SizedBox(width: 6),
-          _DropChip(value: _feedSpecies, items: {'all': 'Tất cả loài', for (final s in speciesOpts) s: s}, onChanged: (v) => setState(() => _feedSpecies = v)),
-          if (_feedSpecies != 'all' || _feedPeriod != 'all') _ClearChip(onTap: () => setState(() { _feedSpecies = 'all'; _feedPeriod = 'all'; })),
+        AppFilterBar(children: [
+          AppDropMapFilter(value: _feedPeriod, items: _periodItems, onChanged: (v) => setState(() => _feedPeriod = v)),
+          AppDropMapFilter(value: _feedSpecies, items: {'all': 'Tất cả loài', for (final s in speciesOpts) s: s}, onChanged: (v) => setState(() => _feedSpecies = v)),
+          if (_feedSpecies != 'all' || _feedPeriod != 'all') AppClearFilterChip(onTap: () => setState(() { _feedSpecies = 'all'; _feedPeriod = 'all'; })),
         ]),
         Padding(
           padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
           child: Row(children: [
-            _WaterKpi('Lô đang nuôi', '${batches.length}', AppColors.primary),
-            const SizedBox(width: 8),
-            _WaterKpi('Tổng cá', _cFmt.format(totalFish), AppColors.info),
-            const SizedBox(width: 8),
-            _WaterKpi('Sinh khối', '${_nFmt.format(totalBiomass)} kg', AppColors.success),
-            const SizedBox(width: 8),
-            _WaterKpi('TĂ đã dùng', '${_nFmt.format(totalFeed)} kg', AppColors.warning),
-            const SizedBox(width: 8),
-            _WaterKpi('Chi phí TĂ', '${_cFmt.format(totalCost.round())}đ', AppColors.error),
+            _kpiCard('Lô đang nuôi', '${batches.length}', null, AppColors.primary),
+              _kpiCard('Tổng cá', _cFmt.format(totalFish), null, AppColors.info),
+              _kpiCard('Sinh khối', '${_nFmt.format(totalBiomass)} kg', null, AppColors.success),
+              _kpiCard('TĂ đã dùng', '${_nFmt.format(totalFeed)} kg', null, AppColors.warning),
+              _kpiCard('Chi phí TĂ', '${_cFmt.format(totalCost.round())}đ', null, AppColors.error),
           ]),
         ),
         _TableHeader(title: 'Thức ăn theo lô cá / ao (${batches.length} lô)'),
@@ -1982,20 +2009,17 @@ class _ReportViewState extends State<ReportView> with SingleTickerProviderStateM
 
     return Column(
       children: [
-        _buildFilterBar([
-          _DropChip(value: _growthPeriod, items: _periodItems, onChanged: (v) => setState(() => _growthPeriod = v)),
-          const SizedBox(width: 6),
-          _DropChip(value: _growthSpecies, items: {'all': 'Tất cả loài', for (final s in speciesOpts) s: s}, onChanged: (v) => setState(() => _growthSpecies = v)),
-          if (_growthSpecies != 'all' || _growthPeriod != 'all') _ClearChip(onTap: () => setState(() { _growthSpecies = 'all'; _growthPeriod = 'all'; })),
+        AppFilterBar(children: [
+          AppDropMapFilter(value: _growthPeriod, items: _periodItems, onChanged: (v) => setState(() => _growthPeriod = v)),
+          AppDropMapFilter(value: _growthSpecies, items: {'all': 'Tất cả loài', for (final s in speciesOpts) s: s}, onChanged: (v) => setState(() => _growthSpecies = v)),
+          if (_growthSpecies != 'all' || _growthPeriod != 'all') AppClearFilterChip(onTap: () => setState(() { _growthSpecies = 'all'; _growthPeriod = 'all'; })),
         ]),
         Padding(
           padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
           child: Row(children: [
-            _WaterKpi('Lô theo dõi', '${batches.length}', AppColors.primary),
-            const SizedBox(width: 8),
-            _WaterKpi('Lần đo', '${measurements.length}', AppColors.info),
-            const SizedBox(width: 8),
-            _WaterKpi('TL TB hiện tại', '${batches.isNotEmpty ? (batches.fold(0.0, (s, b) => s + (b.currentWeight > 0 ? b.currentWeight : b.initialWeight)) / batches.length).toStringAsFixed(0) : 0}g', AppColors.success),
+            _kpiCard('Lô theo dõi', '${batches.length}', null, AppColors.primary),
+              _kpiCard('Lần đo', '${measurements.length}', null, AppColors.info),
+              _kpiCard('TL TB hiện tại', '${batches.isNotEmpty ? (batches.fold(0.0, (s, b) => s + (b.currentWeight > 0 ? b.currentWeight : b.initialWeight)) / batches.length).toStringAsFixed(0) : 0}g', null, AppColors.success),
           ]),
         ),
         _TableHeader(title: 'Tăng trưởng theo lô (${batches.length} lô)'),
@@ -2106,20 +2130,17 @@ class _ReportViewState extends State<ReportView> with SingleTickerProviderStateM
 
     return Column(
       children: [
-        _buildFilterBar([
-          _DropChip(value: _mortPeriod, items: const {'all': 'Tất cả', 'week': '7 ngày', 'month': '30 ngày', 'quarter': '90 ngày'}, onChanged: (v) => setState(() => _mortPeriod = v)),
-          const SizedBox(width: 6),
-          _DropChip(value: _mortCause, items: {'all': 'Tất cả NN', for (final c in causeOpts) c: c}, onChanged: (v) => setState(() => _mortCause = v)),
-          if (_mortPeriod != 'all' || _mortCause != 'all') _ClearChip(onTap: () => setState(() { _mortPeriod = 'all'; _mortCause = 'all'; })),
+        AppFilterBar(children: [
+          AppDropMapFilter(value: _mortPeriod, items: const {'all': 'Tất cả', 'week': '7 ngày', 'month': '30 ngày', 'quarter': '90 ngày'}, onChanged: (v) => setState(() => _mortPeriod = v)),
+          AppDropMapFilter(value: _mortCause, items: {'all': 'Tất cả NN', for (final c in causeOpts) c: c}, onChanged: (v) => setState(() => _mortCause = v)),
+          if (_mortPeriod != 'all' || _mortCause != 'all') AppClearFilterChip(onTap: () => setState(() { _mortPeriod = 'all'; _mortCause = 'all'; })),
         ]),
         Padding(
           padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
           child: Row(children: [
-            _WaterKpi('Tổng hao hụt', _cFmt.format(totalMort), AppColors.error),
-            const SizedBox(width: 8),
-            _WaterKpi('Số lần ghi nhận', '${logs.length}', AppColors.warning),
-            const SizedBox(width: 8),
-            _WaterKpi('Nguyên nhân chính', sortedCauses.isNotEmpty ? sortedCauses.first.key : '—', AppColors.info),
+            _kpiCard('Tổng hao hụt', _cFmt.format(totalMort), null, AppColors.error),
+              _kpiCard('Số lần ghi nhận', '${logs.length}', null, AppColors.warning),
+              _kpiCard('Nguyên nhân chính', sortedCauses.isNotEmpty ? sortedCauses.first.key : '—', null, AppColors.info),
           ]),
         ),
         _TableHeader(title: 'Hao hụt theo lô (${batches.length} lô)'),
@@ -2257,24 +2278,19 @@ class _ReportViewState extends State<ReportView> with SingleTickerProviderStateM
 
     return Column(
       children: [
-        _buildFilterBar([
-          _DropChip(value: _diseasePeriod, items: _periodItems, onChanged: (v) => setState(() => _diseasePeriod = v)),
-          const SizedBox(width: 6),
-          _DropChip(value: _diseaseStatus, items: const {'all': 'Tất cả TT', 'detected': 'Phát hiện', 'treating': 'Đang trị', 'resolved': 'Đã khỏi', 'recurring': 'Tái phát'}, onChanged: (v) => setState(() => _diseaseStatus = v)),
-          const SizedBox(width: 6),
-          _DropChip(value: _diseaseSeverity, items: const {'all': 'Tất cả MĐ', 'mild': 'Nhẹ', 'moderate': 'TB', 'severe': 'Nặng'}, onChanged: (v) => setState(() => _diseaseSeverity = v)),
-          if (_diseaseStatus != 'all' || _diseaseSeverity != 'all' || _diseasePeriod != 'all') _ClearChip(onTap: () => setState(() { _diseaseStatus = 'all'; _diseaseSeverity = 'all'; _diseasePeriod = 'all'; })),
+        AppFilterBar(children: [
+          AppDropMapFilter(value: _diseasePeriod, items: _periodItems, onChanged: (v) => setState(() => _diseasePeriod = v)),
+          AppDropMapFilter(value: _diseaseStatus, items: const {'all': 'Tất cả TT', 'detected': 'Phát hiện', 'treating': 'Đang trị', 'resolved': 'Đã khỏi', 'recurring': 'Tái phát'}, onChanged: (v) => setState(() => _diseaseStatus = v)),
+          AppDropMapFilter(value: _diseaseSeverity, items: const {'all': 'Tất cả MĐ', 'mild': 'Nhẹ', 'moderate': 'TB', 'severe': 'Nặng'}, onChanged: (v) => setState(() => _diseaseSeverity = v)),
+          if (_diseaseStatus != 'all' || _diseaseSeverity != 'all' || _diseasePeriod != 'all') AppClearFilterChip(onTap: () => setState(() { _diseaseStatus = 'all'; _diseaseSeverity = 'all'; _diseasePeriod = 'all'; })),
         ]),
         Padding(
           padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
           child: Row(children: [
-            _WaterKpi('Bệnh đang theo dõi', '$activeDisease', AppColors.error),
-            const SizedBox(width: 8),
-            _WaterKpi('Đã khỏi', '$resolvedDisease', AppColors.success),
-            const SizedBox(width: 8),
-            _WaterKpi('Đang điều trị', '$activeTreatment', AppColors.warning),
-            const SizedBox(width: 8),
-            _WaterKpi('Đang cách ly', '$withdrawalActive', AppColors.info),
+            _kpiCard('Bệnh đang theo dõi', '$activeDisease', null, AppColors.error),
+              _kpiCard('Đã khỏi', '$resolvedDisease', null, AppColors.success),
+              _kpiCard('Đang điều trị', '$activeTreatment', null, AppColors.warning),
+              _kpiCard('Đang cách ly', '$withdrawalActive', null, AppColors.info),
           ]),
         ),
         _TableHeader(title: 'Danh sách bệnh (${diseases.length})'),
@@ -2421,26 +2437,20 @@ class _ReportViewState extends State<ReportView> with SingleTickerProviderStateM
 
     return Column(
       children: [
-        _buildFilterBar([
-          _DropChip(value: _stockIOPeriod, items: _periodItems, onChanged: (v) => setState(() => _stockIOPeriod = v)),
-          const SizedBox(width: 6),
-          _DropChip(value: _stockIOType, items: const {'all': 'Tất cả', 'receipt': 'Phiếu nhập', 'issue': 'Phiếu xuất'}, onChanged: (v) => setState(() => _stockIOType = v)),
-          const SizedBox(width: 6),
-          _DropChip(value: _stockIOStatus, items: const {'all': 'Tất cả TT', 'approved': 'Đã duyệt', 'draft': 'Nháp'}, onChanged: (v) => setState(() => _stockIOStatus = v)),
-          if (_stockIOType != 'all' || _stockIOStatus != 'all' || _stockIOPeriod != 'all') _ClearChip(onTap: () => setState(() { _stockIOType = 'all'; _stockIOStatus = 'all'; _stockIOPeriod = 'all'; })),
+        AppFilterBar(children: [
+          AppDropMapFilter(value: _stockIOPeriod, items: _periodItems, onChanged: (v) => setState(() => _stockIOPeriod = v)),
+          AppDropMapFilter(value: _stockIOType, items: const {'all': 'Tất cả', 'receipt': 'Phiếu nhập', 'issue': 'Phiếu xuất'}, onChanged: (v) => setState(() => _stockIOType = v)),
+          AppDropMapFilter(value: _stockIOStatus, items: const {'all': 'Tất cả TT', 'approved': 'Đã duyệt', 'draft': 'Nháp'}, onChanged: (v) => setState(() => _stockIOStatus = v)),
+          if (_stockIOType != 'all' || _stockIOStatus != 'all' || _stockIOPeriod != 'all') AppClearFilterChip(onTap: () => setState(() { _stockIOType = 'all'; _stockIOStatus = 'all'; _stockIOPeriod = 'all'; })),
         ]),
         Padding(
           padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
           child: Row(children: [
-            _WaterKpi('Phiếu nhập', '${receipts.length}', AppColors.success),
-            const SizedBox(width: 8),
-            _WaterKpi('Phiếu xuất', '${issues.length}', AppColors.warning),
-            const SizedBox(width: 8),
-            _WaterKpi('GT nhập', '${_cFmt.format(totalIn.round())}đ', AppColors.info),
-            const SizedBox(width: 8),
-            _WaterKpi('GT xuất', '${_cFmt.format(totalOut.round())}đ', AppColors.error),
-            const SizedBox(width: 8),
-            _WaterKpi('Cho ăn', '$feedIssues lần', AppColors.primary),
+            _kpiCard('Phiếu nhập', '${receipts.length}', null, AppColors.success),
+              _kpiCard('Phiếu xuất', '${issues.length}', null, AppColors.warning),
+              _kpiCard('GT nhập', '${_cFmt.format(totalIn.round())}đ', null, AppColors.info),
+              _kpiCard('GT xuất', '${_cFmt.format(totalOut.round())}đ', null, AppColors.error),
+              _kpiCard('Cho ăn', '$feedIssues lần', null, AppColors.primary),
           ]),
         ),
         _TableHeader(title: 'Tổng hợp nhập xuất kho'),
@@ -2613,26 +2623,20 @@ class _ReportViewState extends State<ReportView> with SingleTickerProviderStateM
 
     return Column(
       children: [
-        _buildFilterBar([
-          _DropChip(value: _staffPeriod, items: _periodItems, onChanged: (v) => setState(() => _staffPeriod = v)),
-          const SizedBox(width: 6),
-          _DropChip(value: _staffRole, items: {'all': 'Tất cả CV', for (final r in roleOpts) r: r}, onChanged: (v) => setState(() => _staffRole = v)),
-          const SizedBox(width: 6),
-          _DropChip(value: _staffTaskStatus, items: const {'all': 'Tất cả TT', 'done': 'Hoàn thành', 'pending': 'Đang chờ', 'overdue': 'Quá hạn'}, onChanged: (v) => setState(() => _staffTaskStatus = v)),
-          if (_staffRole != 'all' || _staffTaskStatus != 'all' || _staffPeriod != 'all') _ClearChip(onTap: () => setState(() { _staffRole = 'all'; _staffTaskStatus = 'all'; _staffPeriod = 'all'; })),
+        AppFilterBar(children: [
+          AppDropMapFilter(value: _staffPeriod, items: _periodItems, onChanged: (v) => setState(() => _staffPeriod = v)),
+          AppDropMapFilter(value: _staffRole, items: {'all': 'Tất cả CV', for (final r in roleOpts) r: r}, onChanged: (v) => setState(() => _staffRole = v)),
+          AppDropMapFilter(value: _staffTaskStatus, items: const {'all': 'Tất cả TT', 'done': 'Hoàn thành', 'pending': 'Đang chờ', 'overdue': 'Quá hạn'}, onChanged: (v) => setState(() => _staffTaskStatus = v)),
+          if (_staffRole != 'all' || _staffTaskStatus != 'all' || _staffPeriod != 'all') AppClearFilterChip(onTap: () => setState(() { _staffRole = 'all'; _staffTaskStatus = 'all'; _staffPeriod = 'all'; })),
         ]),
         Padding(
           padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
           child: Row(children: [
-            _WaterKpi('Nhân viên', '${filteredEmps.length}', AppColors.primary),
-            const SizedBox(width: 8),
-            _WaterKpi('Tổng CV', '$totalTasks', AppColors.info),
-            const SizedBox(width: 8),
-            _WaterKpi('Hoàn thành', '$doneTasks', AppColors.success),
-            const SizedBox(width: 8),
-            _WaterKpi('Đang chờ', '$pendingTasks', AppColors.warning),
-            const SizedBox(width: 8),
-            _WaterKpi('Quá hạn', '$overdueTasks', overdueTasks > 0 ? AppColors.error : AppColors.success),
+            _kpiCard('Nhân viên', '${filteredEmps.length}', null, AppColors.primary),
+              _kpiCard('Tổng CV', '$totalTasks', null, AppColors.info),
+              _kpiCard('Hoàn thành', '$doneTasks', null, AppColors.success),
+              _kpiCard('Đang chờ', '$pendingTasks', null, AppColors.warning),
+              _kpiCard('Quá hạn', '$overdueTasks', null, overdueTasks > 0 ? AppColors.error : AppColors.success),
           ]),
         ),
         _TableHeader(title: 'Nhân sự & Công việc'),
@@ -2811,31 +2815,31 @@ class _ReportViewState extends State<ReportView> with SingleTickerProviderStateM
     return ListView(
       padding: const EdgeInsets.all(16),
       children: [
-        _buildFilterBar([
-          _DropChip(value: _profitResult, items: const {'all': 'Tất cả', 'profit': 'Có lãi', 'loss': 'Bị lỗ'}, onChanged: (v) => setState(() => _profitResult = v)),
-          if (_profitResult != 'all') _ClearChip(onTap: () => setState(() => _profitResult = 'all')),
+        AppFilterBar(children: [
+          AppDropMapFilter(value: _profitResult, items: const {'all': 'Tất cả', 'profit': 'Có lãi', 'loss': 'Bị lỗ'}, onChanged: (v) => setState(() => _profitResult = v)),
+          if (_profitResult != 'all') AppClearFilterChip(onTap: () => setState(() => _profitResult = 'all')),
         ]),
         const SizedBox(height: 8),
         // Summary
         Row(
           children: [
-            Expanded(child: _MiniKpi(
+            _kpiCard(
               'Tổng doanh thu',
               _cFmt.format(profitData.fold(0.0, (s, e) => s + ((e['revenue'] as num?)?.toDouble() ?? 0))),
-              AppColors.success,
-            )),
+              null, AppColors.success,
+            ),
             const SizedBox(width: 8),
-            Expanded(child: _MiniKpi(
+            _kpiCard(
               'Tổng chi phí',
               _cFmt.format(profitData.fold(0.0, (s, e) => s + ((e['totalCost'] as num?)?.toDouble() ?? 0))),
-              AppColors.error,
-            )),
+              null, AppColors.error,
+            ),
             const SizedBox(width: 8),
-            Expanded(child: _MiniKpi(
+            _kpiCard(
               'Lợi nhuận ròng',
               _cFmt.format(profitData.fold(0.0, (s, e) => s + ((e['profit'] as num?)?.toDouble() ?? 0))),
-              AppColors.primary,
-            )),
+              null, AppColors.primary,
+            ),
           ],
         ),
         const SizedBox(height: 16),
@@ -2942,8 +2946,7 @@ class _ReportViewState extends State<ReportView> with SingleTickerProviderStateM
                     children: [
                       Icon(profit >= 0 ? Icons.trending_up_rounded : Icons.trending_down_rounded,
                         color: profit >= 0 ? AppColors.success : AppColors.error, size: 22),
-                      const SizedBox(width: 8),
-                      Expanded(child: Text(item['batchName']?.toString() ?? 'Lô #${item['batchId']}',
+                                  Expanded(child: Text(item['batchName']?.toString() ?? 'Lô #${item['batchId']}',
                         style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 15))),
                       Container(
                         padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
@@ -3144,23 +3147,21 @@ class _ReportViewState extends State<ReportView> with SingleTickerProviderStateM
           Padding(
             padding: const EdgeInsets.symmetric(horizontal: 16),
             child: Row(children: [
-              _MiniKpi('Thu kỳ này', '${_cFmt.format(totalIn)}đ', AppColors.success),
+              _kpiCard('Thu kỳ này', '${_cFmt.format(totalIn)}đ', null, AppColors.success),
               const SizedBox(width: 8),
-              _MiniKpi('Chi kỳ này', '${_cFmt.format(totalOut)}đ', AppColors.error),
+              _kpiCard('Chi kỳ này', '${_cFmt.format(totalOut)}đ', null, AppColors.error),
               const SizedBox(width: 8),
-              _MiniKpi('Chênh lệch', '${balance >= 0 ? '+' : ''}${_cFmt.format(balance)}đ', balance >= 0 ? AppColors.success : AppColors.error),
+              _kpiCard('Chênh lệch', '${balance >= 0 ? '+' : ''}${_cFmt.format(balance)}đ', null, balance >= 0 ? AppColors.success : AppColors.error),
             ]),
           ),
         if (_cashPeriod != 'all') const SizedBox(height: 8),
 
         // ── Filters ──
-        _buildFilterBar([
-          _DropChip(value: _cashPeriod, items: const {'all': 'Tất cả', 'today': 'Hôm nay', 'week': 'Tuần này', 'month': 'Tháng này', 'quarter': 'Quý này'}, onChanged: (v) => setState(() => _cashPeriod = v)),
-          const SizedBox(width: 6),
-          _DropChip(value: _cashType, items: const {'all': 'Thu & Chi', 'receipt': 'Phiếu thu', 'payment': 'Phiếu chi'}, onChanged: (v) => setState(() => _cashType = v)),
-          const SizedBox(width: 6),
-          _DropChip(value: _cashMethod, items: const {'all': 'PT thanh toán', 'cash': 'Tiền mặt', 'transfer': 'Chuyển khoản'}, onChanged: (v) => setState(() => _cashMethod = v)),
-          if (hasFilter) ...[const SizedBox(width: 6), _ClearChip(onTap: () => setState(() { _cashType = 'all'; _cashMethod = 'all'; _cashPeriod = 'all'; }))],
+        AppFilterBar(children: [
+          AppDropMapFilter(value: _cashPeriod, items: const {'all': 'Tất cả', 'today': 'Hôm nay', 'week': 'Tuần này', 'month': 'Tháng này', 'quarter': 'Quý này'}, onChanged: (v) => setState(() => _cashPeriod = v)),
+          AppDropMapFilter(value: _cashType, items: const {'all': 'Thu & Chi', 'receipt': 'Phiếu thu', 'payment': 'Phiếu chi'}, onChanged: (v) => setState(() => _cashType = v)),
+          AppDropMapFilter(value: _cashMethod, items: const {'all': 'PT thanh toán', 'cash': 'Tiền mặt', 'transfer': 'Chuyển khoản'}, onChanged: (v) => setState(() => _cashMethod = v)),
+          if (hasFilter) ...[const SizedBox(width: 6), AppClearFilterChip(onTap: () => setState(() { _cashType = 'all'; _cashMethod = 'all'; _cashPeriod = 'all'; }))],
         ]),
 
         // ── Transaction count ──
@@ -3221,8 +3222,7 @@ class _ReportViewState extends State<ReportView> with SingleTickerProviderStateM
             decoration: BoxDecoration(color: AppColors.warning.withAlpha(15), borderRadius: BorderRadius.circular(10), border: Border.all(color: AppColors.warning.withAlpha(40))),
             child: Row(children: [
               const Icon(Icons.schedule_rounded, size: 16, color: AppColors.warning),
-              const SizedBox(width: 8),
-              Text('${draftVouchers.length} phiếu chờ xác nhận',
+                  Text('${draftVouchers.length} phiếu chờ xác nhận',
                 style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: AppColors.warning)),
               const Spacer(),
               Text('${_cFmt.format(draftVouchers.fold(0.0, (s, v) => s + v.amount))}đ',
@@ -3269,8 +3269,7 @@ class _ReportViewState extends State<ReportView> with SingleTickerProviderStateM
               children: [
                 Row(children: [
                   Text(v.code, style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 13)),
-                  const SizedBox(width: 6),
-                  Container(
+                          Container(
                     padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
                     decoration: BoxDecoration(color: color.withAlpha(12), borderRadius: BorderRadius.circular(4)),
                     child: Text(v.categoryLabel, style: TextStyle(fontSize: 10, color: color, fontWeight: FontWeight.w600)),
@@ -3284,15 +3283,13 @@ class _ReportViewState extends State<ReportView> with SingleTickerProviderStateM
                 ),
               ],
             )),
-            const SizedBox(width: 8),
-            Column(crossAxisAlignment: CrossAxisAlignment.end, children: [
+              Column(crossAxisAlignment: CrossAxisAlignment.end, children: [
               Text('${isIn ? '+' : '-'}${_cFmt.format(v.amount)}đ',
                 style: TextStyle(fontWeight: FontWeight.w700, fontSize: 14, color: color)),
               const SizedBox(height: 2),
               Row(mainAxisSize: MainAxisSize.min, children: [
                 Icon(methodIcons[v.paymentMethod] ?? Icons.money, size: 12, color: AppColors.textHint),
-                const SizedBox(width: 3),
-                Text(v.paymentMethodLabel, style: const TextStyle(fontSize: 10, color: AppColors.textHint)),
+                      Text(v.paymentMethodLabel, style: const TextStyle(fontSize: 10, color: AppColors.textHint)),
               ]),
             ]),
           ],
@@ -3306,70 +3303,22 @@ class _ReportViewState extends State<ReportView> with SingleTickerProviderStateM
 // HELPER WIDGETS
 // ═════════════════════════════════════════════════════════════════════════════
 
-class _WaterKpi extends StatelessWidget {
-  final String label, value;
-  final Color color;
-  const _WaterKpi(this.label, this.value, this.color);
-
-  @override
-  Widget build(BuildContext context) {
-    return Expanded(
-      child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
-        decoration: BoxDecoration(
-          color: color.withAlpha(15),
-          borderRadius: BorderRadius.circular(10),
-          border: Border.all(color: color.withAlpha(40)),
-        ),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text(label, style: TextStyle(fontSize: 11, color: color, fontWeight: FontWeight.w500)),
-            const SizedBox(height: 2),
-            FittedBox(fit: BoxFit.scaleDown, alignment: Alignment.centerLeft, child: Text(value, style: TextStyle(fontSize: 15, fontWeight: FontWeight.w800, color: color))),
-          ],
-        ),
-      ),
-    );
-  }
-}
-
-class _MiniKpi extends StatelessWidget {
-  final String label, value;
-  final Color color;
-  const _MiniKpi(this.label, this.value, this.color);
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
-      decoration: BoxDecoration(
-        color: color.withAlpha(12),
-        borderRadius: BorderRadius.circular(10),
-        border: Border.all(color: color.withAlpha(30)),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Text(label, style: TextStyle(fontSize: 10, color: color.withAlpha(180), fontWeight: FontWeight.w500)),
-          const SizedBox(height: 2),
-          FittedBox(fit: BoxFit.scaleDown, alignment: Alignment.centerLeft, child: Text(value, style: TextStyle(fontSize: 14, fontWeight: FontWeight.w800, color: color))),
-        ],
-      ),
-    );
-  }
-}
-
 class _TableHeader extends StatelessWidget {
   final String title;
   const _TableHeader({required this.title});
   @override
   Widget build(BuildContext context) {
     return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 6),
+      padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 8),
       child: Row(
         children: [
-          Container(width: 3, height: 16, decoration: BoxDecoration(color: AppColors.primary, borderRadius: BorderRadius.circular(2))),
+          Container(
+            width: 4, height: 18,
+            decoration: BoxDecoration(
+              gradient: const LinearGradient(begin: Alignment.topCenter, end: Alignment.bottomCenter, colors: [Color(0xFF3B82F6), Color(0xFF6366F1)]),
+              borderRadius: BorderRadius.circular(2),
+            ),
+          ),
           const SizedBox(width: 8),
           Text(title, style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w700, color: AppColors.textPrimary)),
         ],
@@ -3397,74 +3346,4 @@ class _EmptyMsg extends StatelessWidget {
   }
 }
 
-// ═══════════════════════════════════════════════════════════════════
-// FILTER HELPER WIDGETS
-// ═══════════════════════════════════════════════════════════════════
 
-class _DropChip extends StatelessWidget {
-  final String value;
-  final Map<String, String> items;
-  final ValueChanged<String> onChanged;
-  const _DropChip({required this.value, required this.items, required this.onChanged});
-  @override
-  Widget build(BuildContext context) {
-    final active = value != items.keys.first;
-    return Container(
-      height: 34,
-      padding: const EdgeInsets.symmetric(horizontal: 10),
-      decoration: BoxDecoration(
-        color: active ? AppColors.primary.withAlpha(20) : AppColors.surfaceVariant,
-        borderRadius: BorderRadius.circular(20),
-        border: Border.all(color: active ? AppColors.primary : AppColors.border),
-      ),
-      child: DropdownButtonHideUnderline(
-        child: DropdownButton<String>(
-          value: value,
-          isDense: true,
-          icon: Icon(Icons.arrow_drop_down, size: 18, color: active ? AppColors.primary : AppColors.textHint),
-          style: TextStyle(fontSize: 12, fontWeight: FontWeight.w500, color: active ? AppColors.primary : AppColors.textSecondary),
-          items: items.entries.map((e) => DropdownMenuItem(value: e.key, child: Text(e.value))).toList(),
-          onChanged: (v) { if (v != null) onChanged(v); },
-        ),
-      ),
-    );
-  }
-}
-
-class _ToggleChip extends StatelessWidget {
-  final String label;
-  final bool active;
-  final Color color;
-  final VoidCallback onTap;
-  const _ToggleChip({required this.label, required this.active, this.color = AppColors.error, required this.onTap});
-  @override
-  Widget build(BuildContext context) {
-    return GestureDetector(
-      onTap: onTap,
-      child: AnimatedContainer(
-        duration: const Duration(milliseconds: 200),
-        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 7),
-        decoration: BoxDecoration(
-          color: active ? color : AppColors.surfaceVariant,
-          borderRadius: BorderRadius.circular(20),
-        ),
-        child: Text(label, style: TextStyle(color: active ? Colors.white : AppColors.textSecondary, fontWeight: active ? FontWeight.w600 : FontWeight.w400, fontSize: 13)),
-      ),
-    );
-  }
-}
-
-class _ClearChip extends StatelessWidget {
-  final VoidCallback onTap;
-  const _ClearChip({required this.onTap});
-  @override
-  Widget build(BuildContext context) {
-    return ActionChip(
-      avatar: const Icon(Icons.clear, size: 14),
-      label: const Text('Xoá lọc', style: TextStyle(fontSize: 12)),
-      padding: EdgeInsets.zero,
-      visualDensity: VisualDensity.compact,
-      onPressed: onTap,
-    );
-  }
-}

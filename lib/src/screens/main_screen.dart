@@ -171,66 +171,111 @@ class _MainScreenState extends State<MainScreen> with TickerProviderStateMixin {
       child: SafeArea(
         child: Column(
           children: [
-            const SizedBox(height: AppSpace.xxl),
-            // Logo / Brand
-            Container(
-              padding: const EdgeInsets.symmetric(horizontal: AppSpace.xl, vertical: AppSpace.sm),
+            const SizedBox(height: AppSpace.xl),
+            // Logo / Brand – refined with double-ring indicator
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: AppSpace.lg, vertical: AppSpace.sm),
               child: Row(
                 children: [
                   Container(
-                    padding: const EdgeInsets.all(AppSpace.sm),
+                    padding: const EdgeInsets.all(10),
                     decoration: BoxDecoration(
-                      color: Colors.white.withAlpha(30),
-                      borderRadius: BorderRadius.circular(AppSizes.borderRadius),
+                      gradient: const LinearGradient(colors: [Color(0xFF67E8F9), Color(0xFF0891B2)]),
+                      borderRadius: BorderRadius.circular(14),
+                      boxShadow: [BoxShadow(color: const Color(0xFF0891B2).withAlpha(60), blurRadius: 12, offset: const Offset(0, 4))],
                     ),
-                    child: const Icon(Icons.water_drop_rounded, color: Colors.white, size: 28),
+                    child: const Icon(Icons.water_drop_rounded, color: Colors.white, size: 26),
                   ),
                   const SizedBox(width: AppSpace.md),
                   Expanded(
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        Text('AQUA', style: AppText.headline.copyWith(color: Colors.white, letterSpacing: 1)),
-                        Text('Manager Pro', style: AppText.caption.copyWith(color: Colors.white70)),
+                        Text('AQUA', style: AppText.headline.copyWith(color: Colors.white, fontSize: 22, fontWeight: FontWeight.w800, letterSpacing: 2)),
+                        Text('Manager Pro', style: AppText.caption.copyWith(color: Colors.white60, fontSize: 11, letterSpacing: 0.5)),
                       ],
                     ),
                   ),
                 ],
               ),
             ),
-            const SizedBox(height: AppSpace.xxl),
+            const SizedBox(height: AppSpace.lg),
+            // Divider line
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 20),
+              child: Container(height: 1, decoration: BoxDecoration(
+                gradient: LinearGradient(colors: [Colors.white.withAlpha(0), Colors.white.withAlpha(30), Colors.white.withAlpha(0)]),
+              )),
+            ),
+            const SizedBox(height: AppSpace.lg),
+            // Nav items
             Expanded(
               child: ListView.builder(
-                padding: const EdgeInsets.symmetric(horizontal: 10),
+                padding: const EdgeInsets.symmetric(horizontal: 12),
                 itemCount: navItems.length,
                 itemBuilder: (_, i) {
                   final item = navItems[i];
                   final selected = i == _currentIndex;
                   return Padding(
-                    padding: const EdgeInsets.only(bottom: 2),
+                    padding: const EdgeInsets.only(bottom: 4),
                     child: Material(
                       color: Colors.transparent,
                       borderRadius: BorderRadius.circular(AppSizes.borderRadius),
                       child: InkWell(
                         borderRadius: BorderRadius.circular(AppSizes.borderRadius),
+                        hoverColor: Colors.white.withAlpha(12),
+                        splashColor: Colors.white.withAlpha(20),
                         onTap: () => _onNav(i),
                         child: AnimatedContainer(
-                          duration: const Duration(milliseconds: 200),
-                          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: AppSpace.md),
+                          duration: const Duration(milliseconds: 250),
+                          curve: Curves.easeOut,
+                          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 11),
                           decoration: BoxDecoration(
-                            color: selected ? Colors.white.withAlpha(25) : Colors.transparent,
+                            color: selected ? Colors.white.withAlpha(20) : Colors.transparent,
                             borderRadius: BorderRadius.circular(AppSizes.borderRadius),
-                            border: selected ? Border.all(color: Colors.white.withAlpha(20)) : null,
                           ),
                           child: Row(
                             children: [
-                              Icon(item.icon, color: selected ? Colors.white : Colors.white60, size: AppSizes.iconMd),
-                              const SizedBox(width: AppSpace.md),
-                              Text(item.label,
-                                  style: AppText.subtitle.copyWith(
-                                    color: selected ? Colors.white : Colors.white60,
+                              // Active indicator bar
+                              AnimatedContainer(
+                                duration: const Duration(milliseconds: 250),
+                                width: 3,
+                                height: selected ? 22 : 0,
+                                margin: const EdgeInsets.only(right: 10),
+                                decoration: BoxDecoration(
+                                  color: selected ? Colors.white : Colors.transparent,
+                                  borderRadius: BorderRadius.circular(2),
+                                ),
+                              ),
+                              // Icon with glow
+                              Container(
+                                padding: const EdgeInsets.all(6),
+                                decoration: selected ? BoxDecoration(
+                                  color: Colors.white.withAlpha(15),
+                                  borderRadius: BorderRadius.circular(8),
+                                ) : null,
+                                child: Icon(item.icon, color: selected ? Colors.white : Colors.white54, size: 20),
+                              ),
+                              const SizedBox(width: 10),
+                              Expanded(
+                                child: Text(item.label,
+                                  style: TextStyle(
+                                    color: selected ? Colors.white : Colors.white54,
                                     fontWeight: selected ? FontWeight.w600 : FontWeight.w400,
+                                    fontSize: 14,
+                                    letterSpacing: selected ? 0.2 : 0,
                                   )),
+                              ),
+                              // Selected dot indicator
+                              if (selected)
+                                Container(
+                                  width: 6, height: 6,
+                                  decoration: BoxDecoration(
+                                    color: AppColors.primaryLight,
+                                    shape: BoxShape.circle,
+                                    boxShadow: [BoxShadow(color: AppColors.primaryLight.withAlpha(80), blurRadius: 6)],
+                                  ),
+                                ),
                             ],
                           ),
                         ),
@@ -240,10 +285,18 @@ class _MainScreenState extends State<MainScreen> with TickerProviderStateMixin {
                 },
               ),
             ),
-            // Version
+            // Version badge
             Padding(
               padding: const EdgeInsets.all(AppSpace.lg),
-              child: Text('v1.2.0', style: AppText.tiny.copyWith(color: Colors.white.withAlpha(80))),
+              child: Container(
+                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                decoration: BoxDecoration(
+                  color: Colors.white.withAlpha(10),
+                  borderRadius: BorderRadius.circular(20),
+                  border: Border.all(color: Colors.white.withAlpha(15)),
+                ),
+                child: Text('v1.2.0', style: TextStyle(color: Colors.white.withAlpha(80), fontSize: 11)),
+              ),
             ),
           ],
         ),
@@ -253,6 +306,12 @@ class _MainScreenState extends State<MainScreen> with TickerProviderStateMixin {
 
   // ── Top bar ──
   Widget _buildTopBar(DataProvider dp, bool wide, List<_NavItem> navItems) {
+    // Greeting based on hour
+    final hour = DateTime.now().hour;
+    final greeting = hour < 12 ? 'Chào buổi sáng' : hour < 18 ? 'Chào buổi chiều' : 'Chào buổi tối';
+    final auth = context.read<AuthProvider>();
+    final userName = auth.user?.displayName ?? '';
+
     return Container(
       padding: EdgeInsets.only(
         left: wide ? AppSpace.xxl : AppSpace.sm,
@@ -262,7 +321,7 @@ class _MainScreenState extends State<MainScreen> with TickerProviderStateMixin {
       ),
       decoration: BoxDecoration(
         color: AppColors.surface,
-        boxShadow: [BoxShadow(color: Colors.black.withAlpha(8), blurRadius: 8, offset: const Offset(0, 2))],
+        boxShadow: [BoxShadow(color: Colors.black.withAlpha(6), blurRadius: 12, offset: const Offset(0, 3))],
       ),
       child: Row(
         children: [
@@ -272,52 +331,99 @@ class _MainScreenState extends State<MainScreen> with TickerProviderStateMixin {
               onPressed: () => Scaffold.of(context).openDrawer(),
             ),
           if (!wide) const SizedBox(width: AppSpace.xs),
+          // Page title + greeting
           Expanded(
-            child: Text(navItems[_currentIndex].label, style: AppText.headline),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Text(navItems[_currentIndex].label, style: AppText.headline),
+                if (wide && userName.isNotEmpty)
+                  Text('$greeting, $userName', style: AppText.caption.copyWith(color: AppColors.textSecondary, fontSize: 12)),
+              ],
+            ),
           ),
-          // Global search
-          IconButton(
-            icon: const Icon(Icons.search_rounded, color: AppColors.textSecondary),
-            tooltip: 'Tìm kiếm',
-            onPressed: () => _showSearchDialog(dp),
+          // Global search pill
+          Container(
+            decoration: BoxDecoration(
+              color: AppColors.primary.withAlpha(8),
+              borderRadius: BorderRadius.circular(20),
+            ),
+            child: IconButton(
+              icon: const Icon(Icons.search_rounded, color: AppColors.textSecondary, size: 20),
+              tooltip: 'Tìm kiếm',
+              onPressed: () => _showSearchDialog(dp),
+            ),
           ),
+          const SizedBox(width: 4),
           // Export
-          IconButton(
-            icon: const ExcelIcon(size: 22),
-            tooltip: 'Xuất dữ liệu',
-            onPressed: () => _showExportDialog(dp),
+          Container(
+            decoration: BoxDecoration(
+              color: AppColors.success.withAlpha(8),
+              borderRadius: BorderRadius.circular(20),
+            ),
+            child: IconButton(
+              icon: const ExcelIcon(size: 20),
+              tooltip: 'Xuất dữ liệu',
+              onPressed: () => _showExportDialog(dp),
+            ),
           ),
-          // Notification badge
+          const SizedBox(width: 4),
+          // Notification badge – animated
           Stack(
             children: [
-              IconButton(
-                icon: const Icon(Icons.notifications_outlined, color: AppColors.textSecondary),
-                tooltip: 'Thông báo',
-                onPressed: () => _navigateToSubModule(context, 'notifications', dp),
+              Container(
+                decoration: BoxDecoration(
+                  color: dp.unreadNotifications > 0 ? AppColors.error.withAlpha(8) : Colors.transparent,
+                  borderRadius: BorderRadius.circular(20),
+                ),
+                child: IconButton(
+                  icon: Icon(
+                    dp.unreadNotifications > 0 ? Icons.notifications_active_rounded : Icons.notifications_outlined,
+                    color: dp.unreadNotifications > 0 ? AppColors.error : AppColors.textSecondary,
+                    size: 21,
+                  ),
+                  tooltip: 'Thông báo',
+                  onPressed: () => _navigateToSubModule(context, 'notifications', dp),
+                ),
               ),
               if (dp.unreadNotifications > 0)
                 Positioned(
-                  right: 6,
-                  top: 6,
+                  right: 4,
+                  top: 4,
                   child: IgnorePointer(
                     child: Container(
                       padding: const EdgeInsets.all(4),
-                      decoration: const BoxDecoration(color: AppColors.error, shape: BoxShape.circle),
+                      decoration: BoxDecoration(
+                        color: AppColors.error,
+                        shape: BoxShape.circle,
+                        boxShadow: [BoxShadow(color: AppColors.error.withAlpha(60), blurRadius: 6)],
+                      ),
                       child: Text('${dp.unreadNotifications}',
-                          style: const TextStyle(color: Colors.white, fontSize: 10, fontWeight: FontWeight.bold)),
+                          style: const TextStyle(color: Colors.white, fontSize: 9, fontWeight: FontWeight.bold)),
                     ),
                   ),
                 ),
             ],
           ),
-          const SizedBox(width: 4),
-          // Avatar
+          const SizedBox(width: 6),
+          // Avatar with gradient ring
           GestureDetector(
             onTap: () => _showProfilePage(dp),
-            child: CircleAvatar(
-              radius: 18,
-              backgroundColor: AppColors.primary.withAlpha(30),
-              child: const Icon(Icons.person_rounded, size: 20, color: AppColors.primary),
+            child: Container(
+              padding: const EdgeInsets.all(2),
+              decoration: BoxDecoration(
+                shape: BoxShape.circle,
+                gradient: const LinearGradient(colors: [AppColors.primary, AppColors.secondary]),
+              ),
+              child: CircleAvatar(
+                radius: 17,
+                backgroundColor: AppColors.surface,
+                child: Text(
+                  userName.isNotEmpty ? userName[0].toUpperCase() : 'U',
+                  style: const TextStyle(color: AppColors.primary, fontWeight: FontWeight.w700, fontSize: 15),
+                ),
+              ),
             ),
           ),
         ],
@@ -333,33 +439,39 @@ class _MainScreenState extends State<MainScreen> with TickerProviderStateMixin {
         child: SafeArea(
           child: Column(
             children: [
-              const SizedBox(height: 24),
-              Container(
+              const SizedBox(height: 20),
+              Padding(
                 padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
                 child: Row(
                   children: [
                     Container(
                       padding: const EdgeInsets.all(10),
-                      decoration: BoxDecoration(color: Colors.white.withAlpha(30), borderRadius: BorderRadius.circular(14)),
-                      child: const Icon(Icons.water_drop_rounded, color: Colors.white, size: 28),
+                      decoration: BoxDecoration(
+                        gradient: const LinearGradient(colors: [Color(0xFF67E8F9), Color(0xFF0891B2)]),
+                        borderRadius: BorderRadius.circular(14),
+                        boxShadow: [BoxShadow(color: const Color(0xFF0891B2).withAlpha(60), blurRadius: 12, offset: const Offset(0, 4))],
+                      ),
+                      child: const Icon(Icons.water_drop_rounded, color: Colors.white, size: 26),
                     ),
                     const SizedBox(width: 14),
                     Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        Text('AQUA Manager', style: AppText.title.copyWith(color: Colors.white, fontSize: 18)),
-                        Text('Quản lý thủy sản', style: AppText.caption.copyWith(color: Colors.white60)),
+                        Text('AQUA', style: AppText.headline.copyWith(color: Colors.white, fontSize: 20, fontWeight: FontWeight.w800, letterSpacing: 2)),
+                        Text('Manager Pro', style: AppText.caption.copyWith(color: Colors.white60, fontSize: 11)),
                       ],
                     ),
                   ],
                 ),
               ),
-              const SizedBox(height: 16),
-              const Divider(color: Colors.white12),
+              const SizedBox(height: 12),
               Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 4),
-                child: Text('v1.2.0', style: AppText.tiny.copyWith(color: Colors.white38)),
+                padding: const EdgeInsets.symmetric(horizontal: 24),
+                child: Container(height: 1, decoration: BoxDecoration(
+                  gradient: LinearGradient(colors: [Colors.white.withAlpha(0), Colors.white.withAlpha(30), Colors.white.withAlpha(0)]),
+                )),
               ),
+              const SizedBox(height: 8),
               Expanded(
                 child: ListView.builder(
                   padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
@@ -367,18 +479,33 @@ class _MainScreenState extends State<MainScreen> with TickerProviderStateMixin {
                   itemBuilder: (_, i) {
                     final item = navItems[i];
                     final sel = i == _currentIndex;
-                    return ListTile(
-                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-                      leading: Icon(item.icon, color: sel ? Colors.white : Colors.white60, size: 22),
-                      title: Text(item.label, style: TextStyle(color: sel ? Colors.white : Colors.white70, fontWeight: sel ? FontWeight.w600 : FontWeight.w400)),
-                      selected: sel,
-                      selectedTileColor: Colors.white.withAlpha(25),
-                      onTap: () {
-                        _onNav(i);
-                        Navigator.pop(context);
-                      },
+                    return Padding(
+                      padding: const EdgeInsets.only(bottom: 2),
+                      child: ListTile(
+                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                        leading: Icon(item.icon, color: sel ? Colors.white : Colors.white60, size: 22),
+                        title: Text(item.label, style: TextStyle(color: sel ? Colors.white : Colors.white70, fontWeight: sel ? FontWeight.w600 : FontWeight.w400)),
+                        selected: sel,
+                        selectedTileColor: Colors.white.withAlpha(20),
+                        onTap: () {
+                          _onNav(i);
+                          Navigator.pop(context);
+                        },
+                      ),
                     );
                   },
+                ),
+              ),
+              Padding(
+                padding: const EdgeInsets.all(16),
+                child: Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                  decoration: BoxDecoration(
+                    color: Colors.white.withAlpha(10),
+                    borderRadius: BorderRadius.circular(20),
+                    border: Border.all(color: Colors.white.withAlpha(15)),
+                  ),
+                  child: Text('v1.2.0', style: TextStyle(color: Colors.white.withAlpha(80), fontSize: 11)),
                 ),
               ),
             ],
@@ -3598,53 +3725,22 @@ class _BranchViewState extends State<_BranchView> {
       children: [
         _SectionHeader(title: 'Chi nhánh (${branches.length}) • ${dp.ponds.length} ao', onAdd: widget.onCreate),
         // ── Filter row ──
-        Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 16),
-          child: Row(
-            children: [
-              Expanded(
-                child: SizedBox(
-                  height: 36,
-                  child: TextField(
-                    onChanged: (v) => setState(() => _searchQuery = v),
-                    style: const TextStyle(fontSize: 13),
-                    decoration: InputDecoration(
-                      hintText: 'Tìm chi nhánh...',
-                      hintStyle: const TextStyle(fontSize: 12),
-                      prefixIcon: const Icon(Icons.search, size: 18),
-                      contentPadding: const EdgeInsets.symmetric(horizontal: 12),
-                      border: OutlineInputBorder(borderRadius: BorderRadius.circular(20), borderSide: BorderSide(color: AppColors.border)),
-                      enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(20), borderSide: BorderSide(color: AppColors.border)),
-                      focusedBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(20), borderSide: const BorderSide(color: AppColors.primary)),
-                      filled: true,
-                      fillColor: AppColors.surfaceVariant,
-                    ),
-                  ),
-                ),
+        AppFilterBar(
+          children: [
+            AppSearchBox(hint: 'Tìm chi nhánh...', onChanged: (v) => setState(() => _searchQuery = v)),
+            OutlinedButton.icon(
+              onPressed: widget.onCreateZone,
+              icon: const Icon(Icons.add_circle_outline, size: 16),
+              label: Text('Phân khu (${dp.zones.length})', style: const TextStyle(fontSize: 12)),
+              style: OutlinedButton.styleFrom(
+                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                foregroundColor: AppColors.secondary,
+                side: BorderSide(color: AppColors.secondary.withAlpha(60)),
               ),
-              const SizedBox(width: 8),
-              OutlinedButton.icon(
-                onPressed: widget.onCreateZone,
-                icon: const Icon(Icons.add_circle_outline, size: 16),
-                label: Text('Phân khu (${dp.zones.length})', style: const TextStyle(fontSize: 12)),
-                style: OutlinedButton.styleFrom(
-                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-                  foregroundColor: AppColors.secondary,
-                  side: BorderSide(color: AppColors.secondary.withAlpha(60)),
-                ),
-              ),
-              if (hasFilter) ...[
-                const SizedBox(width: 8),
-                ActionChip(
-                  avatar: const Icon(Icons.clear, size: 14),
-                  label: const Text('Xoá lọc', style: TextStyle(fontSize: 12)),
-                  padding: EdgeInsets.zero,
-                  visualDensity: VisualDensity.compact,
-                  onPressed: () => setState(() => _searchQuery = ''),
-                ),
-              ],
-            ],
-          ),
+            ),
+            if (hasFilter)
+              AppClearFilterChip(onTap: () => setState(() => _searchQuery = '')),
+          ],
         ),
         const SizedBox(height: 8),
         if (branches.isEmpty)
@@ -3866,50 +3962,17 @@ class _PondViewState extends State<_PondView> {
         ),
         const SizedBox(height: 8),
         // ── Filter row ──
-        Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 16),
-          child: SingleChildScrollView(
-            scrollDirection: Axis.horizontal,
-            child: Row(
-              children: [
-                SizedBox(
-                  width: 180,
-                  height: 34,
-                  child: TextField(
-                    onChanged: (v) => setState(() => _searchQuery = v),
-                    style: const TextStyle(fontSize: 13),
-                    decoration: InputDecoration(
-                      hintText: 'Tìm ao...',
-                      hintStyle: const TextStyle(fontSize: 12),
-                      prefixIcon: const Icon(Icons.search, size: 18),
-                      contentPadding: const EdgeInsets.symmetric(horizontal: 12),
-                      border: OutlineInputBorder(borderRadius: BorderRadius.circular(20), borderSide: BorderSide(color: AppColors.border)),
-                      enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(20), borderSide: BorderSide(color: AppColors.border)),
-                      focusedBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(20), borderSide: const BorderSide(color: AppColors.primary)),
-                      filled: true,
-                      fillColor: AppColors.surfaceVariant,
-                    ),
-                  ),
-                ),
-                const SizedBox(width: 8),
-                _DropdownFilter(
-                  value: _statusFilter,
-                  items: const {'all': 'Tất cả TT', 'active': 'Đang nuôi', 'inactive': 'Trống', 'maintenance': 'Bảo trì'},
-                  onChanged: (v) => setState(() => _statusFilter = v),
-                ),
-                if (hasFilter) ...[
-                  const SizedBox(width: 8),
-                  ActionChip(
-                    avatar: const Icon(Icons.clear, size: 14),
-                    label: const Text('Xoá lọc', style: TextStyle(fontSize: 12)),
-                    padding: EdgeInsets.zero,
-                    visualDensity: VisualDensity.compact,
-                    onPressed: () => setState(() { _statusFilter = 'all'; _searchQuery = ''; }),
-                  ),
-                ],
-              ],
+        AppFilterBar(
+          children: [
+            AppSearchBox(hint: 'Tìm ao...', onChanged: (v) => setState(() => _searchQuery = v)),
+            AppDropMapFilter(
+              value: _statusFilter,
+              items: const {'all': 'Tất cả TT', 'active': 'Đang nuôi', 'inactive': 'Trống', 'maintenance': 'Bảo trì'},
+              onChanged: (v) => setState(() => _statusFilter = v),
             ),
-          ),
+            if (hasFilter)
+              AppClearFilterChip(onTap: () => setState(() { _statusFilter = 'all'; _searchQuery = ''; })),
+          ],
         ),
         const SizedBox(height: 8),
         if (ponds.isEmpty)
@@ -4307,65 +4370,29 @@ class _BatchViewState extends State<_BatchView> {
         ),
         const SizedBox(height: 8),
         // ── Filter row ──
-        Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 16),
-          child: SingleChildScrollView(
-            scrollDirection: Axis.horizontal,
-            child: Row(
-              children: [
-                SizedBox(
-                  width: 180,
-                  height: 34,
-                  child: TextField(
-                    onChanged: (v) => setState(() => _searchQuery = v),
-                    style: const TextStyle(fontSize: 13),
-                    decoration: InputDecoration(
-                      hintText: 'Tìm lô cá / ao...',
-                      hintStyle: const TextStyle(fontSize: 12),
-                      prefixIcon: const Icon(Icons.search, size: 18),
-                      contentPadding: const EdgeInsets.symmetric(horizontal: 12),
-                      border: OutlineInputBorder(borderRadius: BorderRadius.circular(20), borderSide: BorderSide(color: AppColors.border)),
-                      enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(20), borderSide: BorderSide(color: AppColors.border)),
-                      focusedBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(20), borderSide: const BorderSide(color: AppColors.primary)),
-                      filled: true,
-                      fillColor: AppColors.surfaceVariant,
-                    ),
-                  ),
-                ),
-                const SizedBox(width: 8),
-                _DropdownFilter(
-                  value: _statusFilter,
-                  items: const {'all': 'Tất cả TT', 'active': 'Đang nuôi', 'harvested': 'Đã thu', 'transferred': 'Chuyển'},
-                  onChanged: (v) => setState(() => _statusFilter = v),
-                ),
-                // Species chips
-                ...dp.species.take(3).map((s) => Padding(
-                  padding: const EdgeInsets.only(left: 6),
-                  child: GestureDetector(
-                    onTap: () => widget.onEditSpecies(s),
-                    onLongPress: () => widget.onDeleteSpecies(s),
-                    child: Chip(
-                      label: Text(s.name, style: const TextStyle(fontSize: 11)),
-                      backgroundColor: AppColors.primary.withAlpha(15),
-                      visualDensity: VisualDensity.compact,
-                      deleteIcon: const Icon(Icons.close, size: 14),
-                      onDeleted: () => widget.onDeleteSpecies(s),
-                    ),
-                  ),
-                )),
-                if (hasFilter) ...[
-                  const SizedBox(width: 8),
-                  ActionChip(
-                    avatar: const Icon(Icons.clear, size: 14),
-                    label: const Text('Xoá lọc', style: TextStyle(fontSize: 12)),
-                    padding: EdgeInsets.zero,
-                    visualDensity: VisualDensity.compact,
-                    onPressed: () => setState(() { _statusFilter = 'all'; _searchQuery = ''; }),
-                  ),
-                ],
-              ],
+        AppFilterBar(
+          children: [
+            AppSearchBox(hint: 'Tìm lô cá / ao...', onChanged: (v) => setState(() => _searchQuery = v)),
+            AppDropMapFilter(
+              value: _statusFilter,
+              items: const {'all': 'Tất cả TT', 'active': 'Đang nuôi', 'harvested': 'Đã thu', 'transferred': 'Chuyển'},
+              onChanged: (v) => setState(() => _statusFilter = v),
             ),
-          ),
+            // Species chips
+            ...dp.species.take(3).map((s) => GestureDetector(
+              onTap: () => widget.onEditSpecies(s),
+              onLongPress: () => widget.onDeleteSpecies(s),
+              child: Chip(
+                label: Text(s.name, style: const TextStyle(fontSize: 11)),
+                backgroundColor: AppColors.primary.withAlpha(15),
+                visualDensity: VisualDensity.compact,
+                deleteIcon: const Icon(Icons.close, size: 14),
+                onDeleted: () => widget.onDeleteSpecies(s),
+              ),
+            )),
+            if (hasFilter)
+              AppClearFilterChip(onTap: () => setState(() { _statusFilter = 'all'; _searchQuery = ''; })),
+          ],
         ),
         const SizedBox(height: 8),
         if (batches.isEmpty)
@@ -4547,54 +4574,21 @@ class _StaffViewState extends State<_StaffView> {
         ),
         const SizedBox(height: 8),
         // ── Filter row ──
-        Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 16),
-          child: SingleChildScrollView(
-            scrollDirection: Axis.horizontal,
-            child: Row(
-              children: [
-                SizedBox(
-                  width: 180,
-                  height: 34,
-                  child: TextField(
-                    onChanged: (v) => setState(() => _searchQuery = v),
-                    style: const TextStyle(fontSize: 13),
-                    decoration: InputDecoration(
-                      hintText: 'Tìm nhân viên...',
-                      hintStyle: const TextStyle(fontSize: 12),
-                      prefixIcon: const Icon(Icons.search, size: 18),
-                      contentPadding: const EdgeInsets.symmetric(horizontal: 12),
-                      border: OutlineInputBorder(borderRadius: BorderRadius.circular(20), borderSide: BorderSide(color: AppColors.border)),
-                      enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(20), borderSide: BorderSide(color: AppColors.border)),
-                      focusedBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(20), borderSide: const BorderSide(color: AppColors.primary)),
-                      filled: true,
-                      fillColor: AppColors.surfaceVariant,
-                    ),
-                  ),
-                ),
-                const SizedBox(width: 8),
-                _DropdownFilter(
-                  value: _roleFilter,
-                  items: {
-                    'all': 'Tất cả CV',
-                    ...Employee.defaultRoles.map((k, v) => MapEntry(k, v)),
-                    ...{for (final r in dp.employees.map((e) => e.role).where((r) => !Employee.defaultRoles.containsKey(r)).toSet()) r: Employee.roleToLabel(r)},
-                  },
-                  onChanged: (v) => setState(() => _roleFilter = v),
-                ),
-                if (hasFilter) ...[
-                  const SizedBox(width: 8),
-                  ActionChip(
-                    avatar: const Icon(Icons.clear, size: 14),
-                    label: const Text('Xoá lọc', style: TextStyle(fontSize: 12)),
-                    padding: EdgeInsets.zero,
-                    visualDensity: VisualDensity.compact,
-                    onPressed: () => setState(() { _roleFilter = 'all'; _searchQuery = ''; }),
-                  ),
-                ],
-              ],
+        AppFilterBar(
+          children: [
+            AppSearchBox(hint: 'Tìm nhân viên...', onChanged: (v) => setState(() => _searchQuery = v)),
+            AppDropMapFilter(
+              value: _roleFilter,
+              items: {
+                'all': 'Tất cả CV',
+                ...Employee.defaultRoles.map((k, v) => MapEntry(k, v)),
+                ...{for (final r in dp.employees.map((e) => e.role).where((r) => !Employee.defaultRoles.containsKey(r)).toSet()) r: Employee.roleToLabel(r)},
+              },
+              onChanged: (v) => setState(() => _roleFilter = v),
             ),
-          ),
+            if (hasFilter)
+              AppClearFilterChip(onTap: () => setState(() { _roleFilter = 'all'; _searchQuery = ''; })),
+          ],
         ),
         const SizedBox(height: 8),
         if (employees.isEmpty)
@@ -4775,58 +4769,21 @@ class _TaskViewState extends State<_TaskView> {
       children: [
         _SectionHeader(title: 'Công việc (${filtered.length})', onAdd: widget.onCreate),
         // Filter row
-        Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 16),
-          child: SingleChildScrollView(
-            scrollDirection: Axis.horizontal,
-            child: Row(
-              children: [
-                _FilterChip('Tất cả', 'all', _filter, (v) => setState(() => _filter = v)),
-                const SizedBox(width: 8),
-                _FilterChip('Chờ xử lý', 'pending', _filter, (v) => setState(() => _filter = v)),
-                const SizedBox(width: 8),
-                _FilterChip('Hoàn thành', 'done', _filter, (v) => setState(() => _filter = v)),
-                const SizedBox(width: 8),
-                _FilterChip('Quá hạn', 'overdue', _filter, (v) => setState(() => _filter = v)),
-                const SizedBox(width: 12),
-                SizedBox(
-                  width: 180,
-                  height: 34,
-                  child: TextField(
-                    onChanged: (v) => setState(() => _searchQuery = v),
-                    style: const TextStyle(fontSize: 13),
-                    decoration: InputDecoration(
-                      hintText: 'Tìm công việc...',
-                      hintStyle: const TextStyle(fontSize: 12),
-                      prefixIcon: const Icon(Icons.search, size: 18),
-                      contentPadding: const EdgeInsets.symmetric(horizontal: 12),
-                      border: OutlineInputBorder(borderRadius: BorderRadius.circular(20), borderSide: BorderSide(color: AppColors.border)),
-                      enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(20), borderSide: BorderSide(color: AppColors.border)),
-                      focusedBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(20), borderSide: const BorderSide(color: AppColors.primary)),
-                      filled: true,
-                      fillColor: AppColors.surfaceVariant,
-                    ),
-                  ),
-                ),
-                const SizedBox(width: 8),
-                _DropdownFilter(
-                  value: _typeFilter,
-                  items: const {'all': 'Loại CV', 'feeding': 'Cho ăn', 'water_change': 'Thay nước', 'health_check': 'Kiểm tra SK', 'harvest': 'Thu hoạch', 'maintenance': 'Bảo trì', 'other': 'Khác'},
-                  onChanged: (v) => setState(() => _typeFilter = v),
-                ),
-                if (hasFilter) ...[
-                  const SizedBox(width: 8),
-                  ActionChip(
-                    avatar: const Icon(Icons.clear, size: 14),
-                    label: const Text('Xoá lọc', style: TextStyle(fontSize: 12)),
-                    padding: EdgeInsets.zero,
-                    visualDensity: VisualDensity.compact,
-                    onPressed: () => setState(() { _filter = 'all'; _typeFilter = 'all'; _searchQuery = ''; }),
-                  ),
-                ],
-              ],
+        AppFilterBar(
+          children: [
+            AppFilterChip(label: 'Tất cả', active: _filter == 'all', onTap: () => setState(() => _filter = 'all')),
+            AppFilterChip(label: 'Chờ xử lý', active: _filter == 'pending', onTap: () => setState(() => _filter = 'pending')),
+            AppFilterChip(label: 'Hoàn thành', active: _filter == 'done', onTap: () => setState(() => _filter = 'done')),
+            AppFilterChip(label: 'Quá hạn', active: _filter == 'overdue', onTap: () => setState(() => _filter = 'overdue')),
+            AppSearchBox(hint: 'Tìm công việc...', onChanged: (v) => setState(() => _searchQuery = v)),
+            AppDropMapFilter(
+              value: _typeFilter,
+              items: const {'all': 'Loại CV', 'feeding': 'Cho ăn', 'water_change': 'Thay nước', 'health_check': 'Kiểm tra SK', 'harvest': 'Thu hoạch', 'maintenance': 'Bảo trì', 'other': 'Khác'},
+              onChanged: (v) => setState(() => _typeFilter = v),
             ),
-          ),
+            if (hasFilter)
+              AppClearFilterChip(onTap: () => setState(() { _filter = 'all'; _typeFilter = 'all'; _searchQuery = ''; })),
+          ],
         ),
         const SizedBox(height: 8),
         Expanded(
@@ -4885,65 +4842,6 @@ class _TaskViewState extends State<_TaskView> {
                 ),
         ),
       ],
-    );
-  }
-}
-
-class _FilterChip extends StatelessWidget {
-  final String label;
-  final String value;
-  final String selected;
-  final ValueChanged<String> onSelected;
-  const _FilterChip(this.label, this.value, this.selected, this.onSelected);
-  @override
-  Widget build(BuildContext context) {
-    final active = value == selected;
-    return GestureDetector(
-      onTap: () => onSelected(value),
-      child: AnimatedContainer(
-        duration: const Duration(milliseconds: 200),
-        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 7),
-        decoration: BoxDecoration(
-          color: active ? AppColors.primary : AppColors.surfaceVariant,
-          borderRadius: BorderRadius.circular(20),
-        ),
-        child: Text(label,
-            style: TextStyle(
-              color: active ? Colors.white : AppColors.textSecondary,
-              fontWeight: active ? FontWeight.w600 : FontWeight.w400,
-              fontSize: 13,
-            )),
-      ),
-    );
-  }
-}
-
-class _DropdownFilter extends StatelessWidget {
-  final String value;
-  final Map<String, String> items;
-  final ValueChanged<String> onChanged;
-  const _DropdownFilter({required this.value, required this.items, required this.onChanged});
-  @override
-  Widget build(BuildContext context) {
-    final active = value != items.keys.first;
-    return Container(
-      height: 34,
-      padding: const EdgeInsets.symmetric(horizontal: 10),
-      decoration: BoxDecoration(
-        color: active ? AppColors.primary.withAlpha(20) : AppColors.surfaceVariant,
-        borderRadius: BorderRadius.circular(20),
-        border: Border.all(color: active ? AppColors.primary : AppColors.border),
-      ),
-      child: DropdownButtonHideUnderline(
-        child: DropdownButton<String>(
-          value: value,
-          isDense: true,
-          icon: Icon(Icons.arrow_drop_down, size: 18, color: active ? AppColors.primary : AppColors.textHint),
-          style: TextStyle(fontSize: 12, fontWeight: FontWeight.w500, color: active ? AppColors.primary : AppColors.textSecondary),
-          items: items.entries.map((e) => DropdownMenuItem(value: e.key, child: Text(e.value))).toList(),
-          onChanged: (v) { if (v != null) onChanged(v); },
-        ),
-      ),
     );
   }
 }
@@ -5015,50 +4913,17 @@ class _SaleViewState extends State<_SaleView> {
         ),
         const SizedBox(height: 8),
         // ── Filter row ──
-        Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 16),
-          child: SingleChildScrollView(
-            scrollDirection: Axis.horizontal,
-            child: Row(
-              children: [
-                SizedBox(
-                  width: 180,
-                  height: 34,
-                  child: TextField(
-                    onChanged: (v) => setState(() => _searchQuery = v),
-                    style: const TextStyle(fontSize: 13),
-                    decoration: InputDecoration(
-                      hintText: 'Tìm khách hàng...',
-                      hintStyle: const TextStyle(fontSize: 12),
-                      prefixIcon: const Icon(Icons.search, size: 18),
-                      contentPadding: const EdgeInsets.symmetric(horizontal: 12),
-                      border: OutlineInputBorder(borderRadius: BorderRadius.circular(20), borderSide: BorderSide(color: AppColors.border)),
-                      enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(20), borderSide: BorderSide(color: AppColors.border)),
-                      focusedBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(20), borderSide: const BorderSide(color: AppColors.primary)),
-                      filled: true,
-                      fillColor: AppColors.surfaceVariant,
-                    ),
-                  ),
-                ),
-                const SizedBox(width: 8),
-                _DropdownFilter(
-                  value: _statusFilter,
-                  items: const {'all': 'Tất cả TT', 'pending': 'Chờ xử lý', 'completed': 'Hoàn thành', 'cancelled': 'Đã huỷ'},
-                  onChanged: (v) => setState(() => _statusFilter = v),
-                ),
-                if (hasFilter) ...[
-                  const SizedBox(width: 8),
-                  ActionChip(
-                    avatar: const Icon(Icons.clear, size: 14),
-                    label: const Text('Xoá lọc', style: TextStyle(fontSize: 12)),
-                    padding: EdgeInsets.zero,
-                    visualDensity: VisualDensity.compact,
-                    onPressed: () => setState(() { _statusFilter = 'all'; _searchQuery = ''; }),
-                  ),
-                ],
-              ],
+        AppFilterBar(
+          children: [
+            AppSearchBox(hint: 'Tìm khách hàng...', onChanged: (v) => setState(() => _searchQuery = v)),
+            AppDropMapFilter(
+              value: _statusFilter,
+              items: const {'all': 'Tất cả TT', 'pending': 'Chờ xử lý', 'completed': 'Hoàn thành', 'cancelled': 'Đã huỷ'},
+              onChanged: (v) => setState(() => _statusFilter = v),
             ),
-          ),
+            if (hasFilter)
+              AppClearFilterChip(onTap: () => setState(() { _statusFilter = 'all'; _searchQuery = ''; })),
+          ],
         ),
         const SizedBox(height: 8),
         Expanded(
@@ -5218,64 +5083,18 @@ class _ProductViewState extends State<_ProductView> {
         ),
         const SizedBox(height: 8),
         // ── Filter row ──
-        Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 16),
-          child: SingleChildScrollView(
-            scrollDirection: Axis.horizontal,
-            child: Row(
-              children: [
-                SizedBox(
-                  width: 180,
-                  height: 34,
-                  child: TextField(
-                    onChanged: (v) => setState(() => _searchQuery = v),
-                    style: const TextStyle(fontSize: 13),
-                    decoration: InputDecoration(
-                      hintText: 'Tìm sản phẩm...',
-                      hintStyle: const TextStyle(fontSize: 12),
-                      prefixIcon: const Icon(Icons.search, size: 18),
-                      contentPadding: const EdgeInsets.symmetric(horizontal: 12),
-                      border: OutlineInputBorder(borderRadius: BorderRadius.circular(20), borderSide: BorderSide(color: AppColors.border)),
-                      enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(20), borderSide: BorderSide(color: AppColors.border)),
-                      focusedBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(20), borderSide: const BorderSide(color: AppColors.primary)),
-                      filled: true,
-                      fillColor: AppColors.surfaceVariant,
-                    ),
-                  ),
-                ),
-                const SizedBox(width: 8),
-                _DropdownFilter(
-                  value: _categoryFilter,
-                  items: const {'all': 'Tất cả loại', 'feed': 'Thức ăn', 'seed': 'Giống', 'chemical': 'Vi sinh/HChất', 'medicine': 'Thuốc', 'accessory': 'Phụ kiện'},
-                  onChanged: (v) => setState(() => _categoryFilter = v),
-                ),
-                const SizedBox(width: 8),
-                GestureDetector(
-                  onTap: () => setState(() => _lowStockOnly = !_lowStockOnly),
-                  child: AnimatedContainer(
-                    duration: const Duration(milliseconds: 200),
-                    padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 7),
-                    decoration: BoxDecoration(
-                      color: _lowStockOnly ? AppColors.error : AppColors.surfaceVariant,
-                      borderRadius: BorderRadius.circular(20),
-                    ),
-                    child: Text('Sắp hết',
-                        style: TextStyle(color: _lowStockOnly ? Colors.white : AppColors.textSecondary, fontWeight: _lowStockOnly ? FontWeight.w600 : FontWeight.w400, fontSize: 13)),
-                  ),
-                ),
-                if (hasFilter) ...[
-                  const SizedBox(width: 8),
-                  ActionChip(
-                    avatar: const Icon(Icons.clear, size: 14),
-                    label: const Text('Xoá lọc', style: TextStyle(fontSize: 12)),
-                    padding: EdgeInsets.zero,
-                    visualDensity: VisualDensity.compact,
-                    onPressed: () => setState(() { _categoryFilter = 'all'; _lowStockOnly = false; _searchQuery = ''; }),
-                  ),
-                ],
-              ],
+        AppFilterBar(
+          children: [
+            AppSearchBox(hint: 'Tìm sản phẩm...', onChanged: (v) => setState(() => _searchQuery = v)),
+            AppDropMapFilter(
+              value: _categoryFilter,
+              items: const {'all': 'Tất cả loại', 'feed': 'Thức ăn', 'seed': 'Giống', 'chemical': 'Vi sinh/HChất', 'medicine': 'Thuốc', 'accessory': 'Phụ kiện'},
+              onChanged: (v) => setState(() => _categoryFilter = v),
             ),
-          ),
+            AppToggleChip(label: 'Sắp hết', active: _lowStockOnly, onTap: () => setState(() => _lowStockOnly = !_lowStockOnly)),
+            if (hasFilter)
+              AppClearFilterChip(onTap: () => setState(() { _categoryFilter = 'all'; _lowStockOnly = false; _searchQuery = ''; })),
+          ],
         ),
         const SizedBox(height: 8),
 
