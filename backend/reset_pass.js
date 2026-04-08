@@ -3,7 +3,14 @@ const fs = require('fs');
 const path = require('path');
 
 (async () => {
-  const dataPath = path.join(__dirname, 'data.json');
+  const dataPath = path.join(__dirname, 'data', 'data.json');
+  
+  // Ensure data directory exists
+  const dataDir = path.dirname(dataPath);
+  if (!fs.existsSync(dataDir)) {
+    fs.mkdirSync(dataDir, { recursive: true });
+  }
+  
   const data = JSON.parse(fs.readFileSync(dataPath, 'utf8'));
   
   const newPassword = '123456';

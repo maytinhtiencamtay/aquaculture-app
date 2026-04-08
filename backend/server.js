@@ -10,13 +10,18 @@ app.use(cors());
 app.use(express.json());
 
 // ── File-based persistence ──
-const DB_FILE = path.join(__dirname, 'data.json');
+const DB_FILE = path.join(__dirname, 'data', 'data.json');
 
 function saveDb() {
   try {
     const safeDb = {};
     for (const key of Object.keys(db)) {
       safeDb[key] = db[key];
+    }
+    // Ensure directory exists
+    const dir = path.dirname(DB_FILE);
+    if (!fs.existsSync(dir)) {
+      fs.mkdirSync(dir, { recursive: true });
     }
     fs.writeFileSync(DB_FILE, JSON.stringify(safeDb, null, 2), 'utf8');
   } catch (e) { console.error('DB save error:', e.message); }
@@ -25,7 +30,8 @@ function saveDb() {
 function loadDb() {
   try {
     if (fs.existsSync(DB_FILE)) {
-      const raw = fs.readFileSync(DB_FILE, 'utf8');
+      const raw = fs.readFileSync(DB_FILE, 'utf8').trim();
+      if (!raw) return null; // Empty file
       return JSON.parse(raw);
     }
   } catch (e) { console.error('DB load error:', e.message); }
