@@ -18,7 +18,7 @@ const path = require('path');
   
   let found = false;
   for (const emp of data.employees) {
-    if (emp.email === 'test@test.com') {
+    if (emp.email === 'ngthihanh2011@gmail.com') {
       emp.password = hashed;
       found = true;
       console.log('Reset password for:', emp.email, '-> 123456');
