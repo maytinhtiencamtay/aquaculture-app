@@ -1344,11 +1344,14 @@ class _MainScreenState extends State<MainScreen> with TickerProviderStateMixin {
           bool hasZeroQty = false;
           for (final item in lineItems) {
             final qty = ((item['qty'] as num?) ?? 0).toDouble();
+            final inputQty = ((item['inputQty'] as num?) ?? qty).toDouble();
             final price = ((item['unitPrice'] as num?) ?? 0).toDouble();
-            total += qty * price;
             final prod = dp.productById(item['productId'] as String? ?? '');
-            if (prod != null && qty > prod.stock) hasOverStock = true;
-            if (qty <= 0) hasZeroQty = true;
+            final hasConv = prod != null && prod.hasConversion;
+            final rawQty = hasConv ? inputQty / prod!.conversionRatio : qty;
+            total += rawQty * price; // cost based on raw qty × raw price
+            if (prod != null && rawQty > prod.stock) hasOverStock = true;
+            if (hasConv ? inputQty <= 0 : qty <= 0) hasZeroQty = true;
           }
           final canSubmit = batchId != null && pondId != null && lineItems.isNotEmpty && !hasZeroQty;
           final usedProductIds = lineItems.map((e) => e['productId'] as String?).whereType<String>().toSet();
@@ -1438,8 +1441,15 @@ class _MainScreenState extends State<MainScreen> with TickerProviderStateMixin {
                           // Auto-update first line item qty
                           if (lineItems.isNotEmpty) {
                             final wt = selBatch!.currentWeight > 0 ? selBatch.currentWeight : selBatch.initialWeight;
-                            final qty = selBatch.quantityInPond(pondId!) * wt / 1000 * v / 100;
-                            lineItems[0]['qty'] = double.parse(qty.toStringAsFixed(1));
+                            final sugKg = selBatch.quantityInPond(pondId!) * wt / 1000 * v / 100;
+                            final firstProd = dp.productById(lineItems[0]['productId'] as String? ?? '');
+                            if (firstProd != null && firstProd.hasConversion) {
+                              // sugKg is in processed unit (kg), store as inputQty
+                              lineItems[0]['inputQty'] = double.parse(sugKg.toStringAsFixed(1));
+                              lineItems[0]['qty'] = sugKg / firstProd.conversionRatio;
+                            } else {
+                              lineItems[0]['qty'] = double.parse(sugKg.toStringAsFixed(1));
+                            }
                           }
                         }),
                       ),
@@ -1518,9 +1528,13 @@ class _MainScreenState extends State<MainScreen> with TickerProviderStateMixin {
                   final item = entry.value;
                   final prod = dp.productById(item['productId'] as String? ?? '');
                   final qty = ((item['qty'] as num?) ?? 0).toDouble();
+                  final inputQty = ((item['inputQty'] as num?) ?? qty).toDouble(); // user-entered (processed units for conversion products)
                   final stock = prod?.stock ?? 0;
-                  final overStock = prod != null && qty > stock;
-                  final zeroQty = qty <= 0;
+                  final hasConv = prod != null && prod.hasConversion;
+                  // For conversion products, raw consumption = inputQty / ratio
+                  final rawQty = hasConv ? inputQty / prod!.conversionRatio : qty;
+                  final overStock = prod != null && rawQty > stock;
+                  final zeroQty = hasConv ? inputQty <= 0 : qty <= 0;
                   final currentPid = item['productId'] as String?;
                   final availableProducts = dp.products.where((p) => p.id == currentPid || !usedProductIds.contains(p.id)).toList();
 
@@ -1557,18 +1571,34 @@ class _MainScreenState extends State<MainScreen> with TickerProviderStateMixin {
                       Row(children: [
                         Expanded(child: TextFormField(
                           key: ValueKey('feed_qty_${idx}_$currentPid'),
-                          initialValue: qty > 0 ? qty.toStringAsFixed(1) : '',
+                          initialValue: hasConv
+                              ? (inputQty > 0 ? inputQty.toStringAsFixed(1) : '')
+                              : (qty > 0 ? qty.toStringAsFixed(1) : ''),
                           decoration: InputDecoration(
-                            labelText: 'SL xuất (${item['unit'] ?? 'kg'})',
+                            labelText: hasConv
+                                ? 'SL cho ăn (${prod!.processedUnit.isNotEmpty ? prod.processedUnit : prod.unit})'
+                                : 'SL xuất (${item['unit'] ?? 'kg'})',
                             isDense: true,
                             contentPadding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
-                            helperText: prod != null ? 'Tồn: ${_smartQty(stock)}' : null,
+                            helperText: prod != null
+                                ? hasConv
+                                    ? 'Tồn: ${_smartQty(stock)} ${prod.unit} (≈ ${_smartQty(prod.processedStock)} ${prod.processedUnit.isNotEmpty ? prod.processedUnit : prod.unit})'
+                                    : 'Tồn: ${_smartQty(stock)}'
+                                : null,
                             helperStyle: TextStyle(fontSize: 11, color: overStock ? Colors.red : null),
                             errorText: overStock ? 'Vượt tồn kho!' : (zeroQty && prod != null ? 'Nhập SL > 0' : null),
                             errorStyle: const TextStyle(fontSize: 11),
                           ),
                           keyboardType: TextInputType.number,
-                          onChanged: (v) => ss(() => item['qty'] = double.tryParse(v) ?? 0),
+                          onChanged: (v) => ss(() {
+                            final val = double.tryParse(v) ?? 0;
+                            if (hasConv) {
+                              item['inputQty'] = val;
+                              item['qty'] = val / prod!.conversionRatio; // raw qty for stock deduction
+                            } else {
+                              item['qty'] = val;
+                            }
+                          }),
                         )),
                         const SizedBox(width: 8),
                         Expanded(child: TextFormField(
@@ -1579,17 +1609,17 @@ class _MainScreenState extends State<MainScreen> with TickerProviderStateMixin {
                           onChanged: (v) => ss(() => item['unitPrice'] = double.tryParse(v) ?? 0),
                         )),
                       ]),
-                      // Show conversion info (raw → processed)
-                      if (prod != null && prod.hasConversion && qty > 0)
+                      // Show conversion info (processed → raw consumption)
+                      if (hasConv && inputQty > 0)
                         Padding(
                           padding: const EdgeInsets.only(top: 6),
                           child: Row(children: [
                             Icon(Icons.sync_alt, size: 14, color: Colors.indigo.shade400),
                             const SizedBox(width: 6),
-                            Text(
-                              '${_smartQty(qty)} ${prod.unit} × ${prod.conversionRatio} = ${_smartQty(qty * prod.conversionRatio)} ${prod.processedUnit.isNotEmpty ? prod.processedUnit : prod.unit} thành phẩm',
+                            Expanded(child: Text(
+                              'Cho ăn ${_smartQty(inputQty)} ${prod!.processedUnit.isNotEmpty ? prod.processedUnit : prod.unit} → Tiêu hao ${rawQty.toStringAsFixed(2)} ${prod.unit} nguyên liệu',
                               style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: Colors.indigo.shade600),
-                            ),
+                            )),
                           ]),
                         ),
                     ]),
@@ -1648,8 +1678,12 @@ class _MainScreenState extends State<MainScreen> with TickerProviderStateMixin {
       final issueCode = 'XK-${(maxNum + 1).toString().padLeft(3, '0')}';
 
       double total = 0;
+      final cleanItems = <Map<String, dynamic>>[];
       for (final item in lineItems) {
         total += ((item['qty'] as num?) ?? 0) * ((item['unitPrice'] as num?) ?? 0);
+        // Remove inputQty (UI-only field) before sending to backend
+        final clean = Map<String, dynamic>.from(item)..remove('inputQty');
+        cleanItems.add(clean);
       }
 
       await dp.create('stockissues', {
@@ -1659,7 +1693,7 @@ class _MainScreenState extends State<MainScreen> with TickerProviderStateMixin {
         'pondId': pondId,
         'fishBatchId': batchId,
         'branchId': bId,
-        'items': lineItems,
+        'items': cleanItems,
         'totalAmount': total,
         'status': 'draft',
         'note': 'Cho ăn ao ${selPond?.code ?? ''} – Lô ${selBatch?.name ?? batchId}${noteC.text.isNotEmpty ? ' • ${noteC.text}' : ''}',
