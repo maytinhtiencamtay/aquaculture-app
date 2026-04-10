@@ -27,12 +27,18 @@ class ApiService {
   String? _token;
   void setToken(String? token) => _token = token;
 
+  /// Called when any API response is 401 — signals token expired
+  VoidCallback? onUnauthorized;
+
   Map<String, String> get _headers => {
         ..._defaultHeaders,
         if (_token != null) 'Authorization': 'Bearer $_token',
       };
 
   ApiResponse<dynamic> _parseResponse(http.Response resp) {
+    if (resp.statusCode == 401 && onUnauthorized != null) {
+      onUnauthorized!();
+    }
     dynamic data;
     try {
       data = resp.body.isEmpty ? null : jsonDecode(resp.body);

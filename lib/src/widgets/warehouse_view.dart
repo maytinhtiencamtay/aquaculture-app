@@ -733,6 +733,9 @@ class _WarehouseViewState extends State<WarehouseView> with SingleTickerProvider
                                       style: TextStyle(fontWeight: FontWeight.w700, fontSize: 14, color: p.stock <= 0 ? AppColors.error : (p.isLowStock ? AppColors.warning : AppColors.textPrimary))),
                                   Text(p.stock <= 0 ? 'Hết hàng!' : (p.isLowStock ? 'Sắp hết! (min: ${p.minStock.toStringAsFixed(0)})' : 'Tồn kho'),
                                       style: TextStyle(fontSize: 11, color: p.stock <= 0 ? AppColors.error : (p.isLowStock ? AppColors.warning : AppColors.textHint))),
+                                  if (p.hasConversion)
+                                    Text('→ ${p.processedStock.toStringAsFixed(1)} ${p.processedUnit.isNotEmpty ? p.processedUnit : p.unit} thành phẩm',
+                                        style: TextStyle(fontSize: 11, fontWeight: FontWeight.w600, color: Colors.indigo.shade600)),
                                 ]),
                               ]),
                               // Row 3: Extra info tags
@@ -886,6 +889,22 @@ class _WarehouseViewState extends State<WarehouseView> with SingleTickerProvider
                       const SizedBox(width: 8),
                       Expanded(child: _detailStatCard('Lợi nhuận/SP', p.costPrice > 0 ? '${_currFmt.format(p.profit)}đ' : '—', p.profit > 0 ? AppColors.success : AppColors.textHint)),
                     ]),
+                    if (p.hasConversion) ...[
+                      const SizedBox(height: 8),
+                      Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                        decoration: BoxDecoration(color: Colors.indigo.shade50, borderRadius: BorderRadius.circular(10), border: Border.all(color: Colors.indigo.shade200)),
+                        child: Row(children: [
+                          Icon(Icons.swap_horiz_rounded, size: 18, color: Colors.indigo.shade600),
+                          const SizedBox(width: 8),
+                          Expanded(child: Text('Quy đổi: 1 ${p.unit} × ${p.conversionRatio} = ${p.conversionRatio.toStringAsFixed(p.conversionRatio == p.conversionRatio.roundToDouble() ? 0 : 1)} ${p.processedUnit.isNotEmpty ? p.processedUnit : p.unit} thành phẩm',
+                              style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600, color: Colors.indigo.shade700))),
+                          const SizedBox(width: 8),
+                          Text('Tồn TP: ${p.processedStock.toStringAsFixed(1)} ${p.processedUnit.isNotEmpty ? p.processedUnit : p.unit}',
+                              style: TextStyle(fontSize: 12, fontWeight: FontWeight.w700, color: Colors.indigo.shade800)),
+                        ]),
+                      ),
+                    ],
                     const SizedBox(height: 16),
 
                     // ── Information ──
@@ -895,6 +914,7 @@ class _WarehouseViewState extends State<WarehouseView> with SingleTickerProvider
                       child: Column(children: [
                         _detailRow(Icons.sell_outlined, 'Giá bán', '${_currFmt.format(p.price)}đ / ${p.unit}'),
                         if (p.costPrice > 0) _detailRow(Icons.price_change_outlined, 'Giá nhập', '${_currFmt.format(p.costPrice)}đ / ${p.unit}'),
+                        if (p.hasConversion) _detailRow(Icons.swap_horiz_rounded, 'Giá thành phẩm', '${_currFmt.format(p.processedCostPrice)}đ / ${p.processedUnit.isNotEmpty ? p.processedUnit : p.unit}'),
                         if (p.brand.isNotEmpty) _detailRow(Icons.business_center_outlined, 'Thương hiệu', p.brand),
                         if (p.origin.isNotEmpty) _detailRow(Icons.public, 'Xuất xứ', p.origin),
                         _detailRow(Icons.trending_down, 'Tồn tối thiểu', p.minStock > 0 ? '${p.minStock.toStringAsFixed(0)} ${p.unit}' : 'Chưa đặt'),

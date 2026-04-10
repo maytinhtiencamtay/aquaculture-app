@@ -137,14 +137,41 @@ class DashboardView extends StatelessWidget {
     final expense30 = _totalExpense30d();
     final profit30 = revenue30 - expense30;
 
+    // Input costs: seed cost
+    final totalSeedCost = dp.fishBatches
+        .where((b) => b.status == 'active')
+        .fold(0.0, (s, b) => s + b.totalImportCost);
+
+    // Over-density ponds
+    final overDensityPonds = <Map<String, dynamic>>[];
+    for (final pond in dp.ponds.where((p) => p.status == 'active' && p.area > 0)) {
+      int totalFish = 0;
+      double speciesDensity = 0;
+      for (final b in dp.fishBatches.where((b) => b.status == 'active')) {
+        final qty = b.quantityInPond(pond.id);
+        if (qty > 0) {
+          totalFish += qty;
+          final sp = dp.speciesById(b.speciesId);
+          if (sp != null && sp.densityPerM2 > speciesDensity) speciesDensity = sp.densityPerM2;
+        }
+      }
+      if (speciesDensity > 0 && totalFish > 0) {
+        final maxFish = (pond.area * speciesDensity).floor();
+        final ratio = totalFish / maxFish;
+        if (ratio > 1.0) {
+          overDensityPonds.add({'code': pond.code, 'totalFish': totalFish, 'maxFish': maxFish, 'ratio': (ratio * 100).round()});
+        }
+      }
+    }
+
     return RefreshIndicator(
       onRefresh: () => dp.loadAll(),
       child: ListView(
         padding: const EdgeInsets.all(20),
         children: [
-          // ── Row 1: KPI Grid (6 cards) ──
+          // ── Row 1: KPI Grid (8 cards) ──
           LayoutBuilder(builder: (_, constraints) {
-            final cols = wide ? 6 : 3;
+            final cols = wide ? 4 : 2;
             const spacing = 12.0;
             final w = (constraints.maxWidth - spacing * (cols - 1)) / cols;
             final cards = <Widget>[
@@ -154,6 +181,8 @@ class DashboardView extends StatelessWidget {
               _MiniKpi(icon: Icons.trending_down_rounded, label: 'Chi phí 30d', value: '${_cFmt.format(expense30)}đ', color: AppColors.kpiDanger),
               _MiniKpi(icon: Icons.account_balance_wallet_rounded, label: 'Lợi nhuận 30d', value: '${profit30 >= 0 ? "+" : ""}${_cFmt.format(profit30)}đ', color: profit30 >= 0 ? AppColors.success : AppColors.error),
               _MiniKpi(icon: Icons.task_alt_rounded, label: 'Việc chờ/quá hạn', value: '${dp.pendingTasks}/${dp.overdueTasks}', color: AppColors.kpiWarning),
+              _MiniKpi(icon: Icons.phishing_rounded, label: 'Chi phí giống', value: '${_cFmt.format(totalSeedCost)}đ', color: Colors.teal),
+              _MiniKpi(icon: Icons.swap_horiz_rounded, label: 'Ao cần san', value: '${overDensityPonds.length}', color: overDensityPonds.isNotEmpty ? AppColors.error : AppColors.kpiSuccess),
             ];
             return Wrap(
               spacing: spacing, runSpacing: spacing,
@@ -161,6 +190,81 @@ class DashboardView extends StatelessWidget {
             );
           }),
           const SizedBox(height: 20),
+
+          // ── Over-density ponds warning ──
+          if (overDensityPonds.isNotEmpty)
+            Card(
+              color: Colors.orange.shade50,
+              child: Padding(
+                padding: const EdgeInsets.all(16),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Row(children: [
+                      Icon(Icons.warning_amber_rounded, color: Colors.orange.shade700),
+                      const SizedBox(width: 8),
+                      Text('Ao quá mật độ - cần san cá', style: TextStyle(fontWeight: FontWeight.bold, color: Colors.orange.shade800, fontSize: 15)),
+                    ]),
+                    const SizedBox(height: 8),
+                    ...overDensityPonds.map((p) => Padding(
+                      padding: const EdgeInsets.symmetric(vertical: 2),
+                      child: Row(children: [
+                        const SizedBox(width: 32),
+                        Text('Ao ${p['code']}:', style: const TextStyle(fontWeight: FontWeight.w600)),
+                        const SizedBox(width: 8),
+                        Text('${_cFmt.format(p['totalFish'])} con / tối đa ${_cFmt.format(p['maxFish'])} con'),
+                        const SizedBox(width: 8),
+                        Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                          decoration: BoxDecoration(
+                            color: (p['ratio'] as int) > 150 ? Colors.red : Colors.orange,
+                            borderRadius: BorderRadius.circular(8),
+                          ),
+                          child: Text('${p['ratio']}%', style: const TextStyle(color: Colors.white, fontSize: 12, fontWeight: FontWeight.bold)),
+                        ),
+                      ]),
+                    )),
+                  ],
+                ),
+              ),
+            ),
+          if (overDensityPonds.isNotEmpty) const SizedBox(height: 16),
+
+          // ── Seed cost breakdown ──
+          if (totalSeedCost > 0)
+            Card(
+              child: Padding(
+                padding: const EdgeInsets.all(16),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Row(children: [
+                      Icon(Icons.phishing_rounded, color: Colors.teal.shade700),
+                      const SizedBox(width: 8),
+                      Text('Chi phí giống đầu vào (lô đang nuôi)', style: TextStyle(fontWeight: FontWeight.bold, color: Colors.teal.shade800, fontSize: 15)),
+                    ]),
+                    const SizedBox(height: 8),
+                    ...dp.fishBatches.where((b) => b.status == 'active' && b.importPrice > 0).map((b) {
+                      final sp = dp.speciesById(b.speciesId);
+                      return Padding(
+                        padding: const EdgeInsets.symmetric(vertical: 2),
+                        child: Row(children: [
+                          const SizedBox(width: 32),
+                          Expanded(child: Text('${b.name} (${sp?.name ?? "?"})')),
+                          Text('${_cFmt.format(b.initialQuantity)} con × ${_cFmt.format(b.importPrice)}đ = ', style: const TextStyle(fontSize: 13)),
+                          Text('${_cFmt.format(b.totalImportCost)}đ', style: const TextStyle(fontWeight: FontWeight.bold)),
+                        ]),
+                      );
+                    }),
+                    const Divider(),
+                    Row(mainAxisAlignment: MainAxisAlignment.end, children: [
+                      Text('Tổng: ${_cFmt.format(totalSeedCost)}đ', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16, color: Colors.teal.shade700)),
+                    ]),
+                  ],
+                ),
+              ),
+            ),
+          if (totalSeedCost > 0) const SizedBox(height: 16),
 
           // ── Row 2: Revenue/Expense Line Chart + Pond Pie ──
           if (wide)

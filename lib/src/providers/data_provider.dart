@@ -34,6 +34,9 @@ class DataProvider extends ChangeNotifier {
   /// Set auth token so all API calls include Authorization header
   void setToken(String? token) => _api.setToken(token);
 
+  /// Register a callback invoked when API returns 401 (token expired)
+  set onUnauthorized(VoidCallback? cb) => _api.onUnauthorized = cb;
+
   bool _loading = false;
   bool get loading => _loading;
 
@@ -249,7 +252,9 @@ class DataProvider extends ChangeNotifier {
     await reload(resource);
     final cascades = _cascadeReloads[resource];
     if (cascades != null) {
-      await Future.wait(cascades.map((r) => reload(r)));
+      // Loại bỏ cascade vòng (tránh fishbatches→ponds→fishbatches)
+      final safeCascades = cascades.where((r) => r != resource).toList();
+      await Future.wait(safeCascades.map((r) => reload(r)));
     }
   }
 

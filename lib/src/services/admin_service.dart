@@ -133,4 +133,37 @@ class AdminService {
     final resp = await _apiService.delete('/sysadmin/licenses/$id');
     return resp.statusCode == 200;
   }
+
+  // Reset store owner password
+  Future<({String? message, String? error})> resetStorePassword(String storeId, {String? newPassword}) async {
+    final resp = await _apiService.put('/sysadmin/stores/$storeId/reset-password', body: {
+      if (newPassword != null) 'newPassword': newPassword,
+    });
+    if (resp.statusCode == 200 && resp.data is Map) {
+      return (message: resp.data['message'] as String?, error: null);
+    }
+    final msg = (resp.data is Map) ? resp.data['message'] as String? : null;
+    return (message: null, error: msg ?? 'Reset mật khẩu thất bại');
+  }
+
+  // Change sysadmin password
+  Future<String?> changePassword({required String currentPassword, required String newPassword}) async {
+    final resp = await _apiService.put('/sysadmin/password', body: {
+      'currentPassword': currentPassword,
+      'newPassword': newPassword,
+    });
+    if (resp.statusCode == 200) return null;
+    final msg = (resp.data is Map) ? resp.data['message'] as String? : null;
+    return msg ?? 'Đổi mật khẩu thất bại';
+  }
+
+  // Activity logs
+  Future<List<Map<String, dynamic>>> getAdminLogs() async {
+    final resp = await _apiService.get('/sysadmin/logs');
+    if (resp.statusCode == 200) return (resp.data as List).cast<Map<String, dynamic>>();
+    return [];
+  }
+
+  // Export stores CSV URL
+  String get exportStoresUrl => '${ApiService.baseUrl}/sysadmin/export/stores';
 }

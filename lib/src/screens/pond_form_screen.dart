@@ -128,20 +128,9 @@ class _PondFormScreenState extends State<PondFormScreen> {
                 ],
               ),
               const SizedBox(height: 16),
-              DropdownButtonFormField<String>(
+              _PondTypeAutocomplete(
                 initialValue: _type,
-                decoration: const InputDecoration(
-                  labelText: 'Loại ao',
-                  prefixIcon: Icon(Icons.category),
-                  border: OutlineInputBorder(),
-                ),
-                items: const [
-                  DropdownMenuItem(value: 'earth', child: Text('Ao đất')),
-                  DropdownMenuItem(value: 'hdpe', child: Text('Ao HDPE')),
-                  DropdownMenuItem(value: 'glass', child: Text('Bể kính')),
-                  DropdownMenuItem(value: 'cage', child: Text('Lồng')),
-                ],
-                onChanged: (v) => setState(() => _type = v!),
+                onChanged: (v) => setState(() => _type = v),
               ),
               const SizedBox(height: 16),
               DropdownButtonFormField<String>(
@@ -174,6 +163,80 @@ class _PondFormScreenState extends State<PondFormScreen> {
           ),
         ),
       ),
+    );
+  }
+}
+
+/// Pond type combo: preset options + free text input
+class _PondTypeAutocomplete extends StatefulWidget {
+  final String initialValue;
+  final ValueChanged<String> onChanged;
+  const _PondTypeAutocomplete({required this.initialValue, required this.onChanged});
+  @override
+  State<_PondTypeAutocomplete> createState() => _PondTypeAutocompleteState();
+}
+
+class _PondTypeAutocompleteState extends State<_PondTypeAutocomplete> {
+  static const _presets = <String, String>{
+    'earth': 'Ao đất',
+    'hdpe': 'Ao HDPE',
+    'glass': 'Bể kính',
+    'cage': 'Lồng',
+  };
+
+  late final TextEditingController _ctrl;
+  late String _value;
+
+  @override
+  void initState() {
+    super.initState();
+    _value = widget.initialValue;
+    _ctrl = TextEditingController(text: _presets[_value] ?? _value);
+  }
+
+  @override
+  void dispose() {
+    _ctrl.dispose();
+    super.dispose();
+  }
+
+  String _toKey(String display) {
+    final entry = _presets.entries.where((e) => e.value == display);
+    return entry.isNotEmpty ? entry.first.key : display;
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final allOptions = _presets.values.toList();
+    return Autocomplete<String>(
+      optionsBuilder: (v) {
+        if (v.text.isEmpty) return allOptions;
+        return allOptions.where((o) => o.toLowerCase().contains(v.text.toLowerCase()));
+      },
+      fieldViewBuilder: (ctx, textCtrl, focusNode, onSubmitted) {
+        if (textCtrl.text.isEmpty && _ctrl.text.isNotEmpty) {
+          textCtrl.text = _ctrl.text;
+        }
+        return TextField(
+          controller: textCtrl,
+          focusNode: focusNode,
+          decoration: const InputDecoration(
+            labelText: 'Loại ao',
+            prefixIcon: Icon(Icons.water),
+            border: OutlineInputBorder(),
+            hintText: 'Chọn hoặc nhập loại ao mới',
+          ),
+          onChanged: (v) {
+            _value = _toKey(v);
+            widget.onChanged(_value);
+          },
+          onSubmitted: (_) => onSubmitted(),
+        );
+      },
+      onSelected: (v) {
+        _value = _toKey(v);
+        widget.onChanged(_value);
+      },
     );
   }
 }

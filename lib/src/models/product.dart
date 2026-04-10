@@ -17,6 +17,8 @@ class Product {
   final DateTime? expiryDate;
   final String note;
   final bool isActive;
+  final double conversionRatio;  // Hệ số quy đổi: 1 đơn vị nguyên liệu → X đơn vị thành phẩm (VD: 1 gói ART → 3kg ART ủ)
+  final String processedUnit;   // Đơn vị thành phẩm sau quy đổi (VD: 'kg' cho ART ủ)
   final DateTime createdAt;
 
   Product({
@@ -24,7 +26,8 @@ class Product {
     this.brand = '', this.origin = '', this.unit = 'kg', this.description = '',
     this.price = 0, this.costPrice = 0, this.stock = 0, this.minStock = 0, this.maxStock = 0,
     this.supplierId = '', this.location = '', this.expiryDate, this.note = '',
-    this.isActive = true, required this.createdAt,
+    this.isActive = true, this.conversionRatio = 0, this.processedUnit = '',
+    required this.createdAt,
   });
 
   factory Product.fromJson(Map<String, dynamic> json) => Product(
@@ -46,6 +49,8 @@ class Product {
     expiryDate: json['expiryDate'] != null ? DateTime.tryParse(json['expiryDate'] as String) : null,
     note: json['note'] as String? ?? '',
     isActive: json['isActive'] as bool? ?? true,
+    conversionRatio: (json['conversionRatio'] as num?)?.toDouble() ?? 0,
+    processedUnit: json['processedUnit'] as String? ?? '',
     createdAt: json['createdAt'] != null ? DateTime.parse(json['createdAt'] as String) : DateTime.now(),
   );
 
@@ -55,6 +60,7 @@ class Product {
     'stock': stock, 'minStock': minStock, 'maxStock': maxStock,
     'supplierId': supplierId, 'location': location,
     'expiryDate': expiryDate?.toIso8601String(), 'note': note, 'isActive': isActive,
+    'conversionRatio': conversionRatio, 'processedUnit': processedUnit,
   };
 
   bool get isLowStock => minStock > 0 && stock <= minStock;
@@ -63,6 +69,12 @@ class Product {
   bool get isExpiringSoon => expiryDate != null && !isExpired && expiryDate!.difference(DateTime.now()).inDays <= 30;
   double get stockValue => stock * costPrice;
   double get profit => price - costPrice;
+  /// Số lượng thành phẩm quy đổi được từ tồn kho hiện tại
+  double get processedStock => conversionRatio > 0 ? stock * conversionRatio : stock;
+  /// Có hệ số quy đổi hay không
+  bool get hasConversion => conversionRatio > 0;
+  /// Giá thành phẩm quy đổi / đơn vị
+  double get processedCostPrice => conversionRatio > 0 ? costPrice / conversionRatio : costPrice;
 
   String get categoryLabel {
     switch (category) {

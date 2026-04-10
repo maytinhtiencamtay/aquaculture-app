@@ -174,6 +174,7 @@ const db = {
   waterchangelogs: [],
   sysadmins: [],
   licenses: [],
+  adminLogs: [],
 };
 
 function genId() { return crypto.randomUUID(); }
@@ -308,6 +309,11 @@ app.post('/api/auth/login', async (req, res) => {
   if (storeBranch && storeBranch.status === 'suspended') {
     return res.status(403).json({ message: 'Cửa hàng đã bị tạm ngưng. Vui lòng liên hệ quản trị viên.' });
   }
+  // Check license expiry
+  const loginLicense = db.licenses.find(l => l.storeId === user.storeId && l.status === 'active');
+  if (loginLicense && new Date(loginLicense.expiresAt) <= new Date()) {
+    return res.status(403).json({ message: 'License đã hết hạn. Vui lòng liên hệ quản trị viên để gia hạn.', licenseExpired: true });
+  }
   const valid = await bcrypt.compare(password, user.password);
   if (!valid) return res.status(401).json({ message: 'Mật khẩu không đúng' });
   // Find active license for trial info
@@ -439,11 +445,31 @@ app.get('/api/dashboard', authMiddleware, (req, res) => {
   const phWarnings = storePonds.filter(p => p.currentPh != null && (p.currentPh > 8.5 || p.currentPh < 6.5)).length;
   const totalEmployees = storeEmployees.length;
 
+  // Input costs: seed cost (giá cá giống mua về)
+  const activeBatchList = storeBatches.filter(b => b.status === 'active');
+  const totalSeedCost = activeBatchList.reduce((s, b) => s + ((b.importPrice || 0) * (b.initialQuantity || 0)), 0);
+
+  // Ponds over density (need transfer / san cá)
+  const overDensityPonds = [];
+  storePonds.filter(p => p.status === 'active' && p.area > 0).forEach(pond => {
+    let totalFish = 0; let speciesDensity = 0;
+    storeBatches.filter(b => b.status === 'active').forEach(b => {
+      const inPond = (b.pondAllocations || []).find(a => a.pondId === pond._id);
+      if (inPond) { totalFish += inPond.quantity || 0; const sp = db.species.find(s => s._id === b.speciesId); if (sp && sp.densityPerM2 > speciesDensity) speciesDensity = sp.densityPerM2; }
+      else if (b.pondId === pond._id && (!b.pondAllocations || b.pondAllocations.length === 0)) { totalFish += b.currentQuantity || 0; const sp = db.species.find(s => s._id === b.speciesId); if (sp && sp.densityPerM2 > speciesDensity) speciesDensity = sp.densityPerM2; }
+    });
+    if (speciesDensity > 0 && totalFish > 0) {
+      const maxFish = Math.floor(pond.area * speciesDensity);
+      const ratio = totalFish / maxFish;
+      if (ratio > 1.0) overDensityPonds.push({ pondId: pond._id, code: pond.code, totalFish, maxFish, ratio: Math.round(ratio * 100) });
+    }
+  });
+
   res.json({
     totalPonds, activePonds, inactivePonds, maintenancePonds,
     activeBatches, pendingTasks, overdueTasks, lowStockProducts,
     totalCustomers, totalDebt, pendingSales, unreadNotifications,
-    phWarnings, totalEmployees,
+    phWarnings, totalEmployees, totalSeedCost, overDensityPonds,
     recentPonds: storePonds.slice(0, 5),
     todayTasks: storeTasks.filter(t => t.status === 'pending').slice(0, 5),
     alerts: storeNotifications.filter(n => !n.read).slice(0, 5),
@@ -1291,6 +1317,68 @@ app.post('/api/notifications/check', authMiddleware, (req, res) => {
         created.push(n);
       }
     }
+  });
+
+  // 9) Pond over-density alerts — need to transfer/thin fish (san cá)
+  const activePonds = db.ponds.filter(p => (!storeId || p.storeId === storeId) && p.status === 'active' && p.area > 0);
+  for (const pond of activePonds) {
+    // Count total fish in this pond from all active batches
+    let totalFish = 0;
+    let batchNames = [];
+    let speciesDensity = 0;
+    db.fishbatches.filter(b => b.status === 'active').forEach(b => {
+      const allocs = b.pondAllocations || [];
+      const inPond = allocs.find(a => a.pondId === pond._id);
+      if (inPond) {
+        totalFish += inPond.quantity || 0;
+        batchNames.push(b.name || b._id);
+        const sp = db.species.find(s => s._id === b.speciesId);
+        if (sp && sp.densityPerM2 > speciesDensity) speciesDensity = sp.densityPerM2;
+      } else if (b.pondId === pond._id && allocs.length === 0) {
+        totalFish += b.currentQuantity || 0;
+        batchNames.push(b.name || b._id);
+        const sp = db.species.find(s => s._id === b.speciesId);
+        if (sp && sp.densityPerM2 > speciesDensity) speciesDensity = sp.densityPerM2;
+      }
+    });
+    if (speciesDensity <= 0 || totalFish <= 0) continue;
+    const maxFish = Math.floor(pond.area * speciesDensity);
+    const ratio = totalFish / maxFish;
+    if (ratio > 1.2) { // Over 120% density → need transfer
+      const exists = db.notifications.find(n =>
+        n.pondId === pond._id && n.title === 'Ao quá mật độ - cần san cá' && !n.read
+      );
+      if (!exists) {
+        const n = {
+          _id: genId(),
+          title: 'Ao quá mật độ - cần san cá',
+          message: `Ao ${pond.code}: ${totalFish} con/${pond.area}m² (${(ratio * 100).toFixed(0)}% mật độ cho phép ${maxFish} con). Lô: ${batchNames.join(', ')}`,
+          type: 'warning',
+          priority: ratio > 1.5 ? 'high' : 'medium',
+          pondId: pond._id,
+          read: false,
+          createdAt: now.toISOString(),
+        };
+        if (storeId) n.storeId = storeId;
+        db.notifications.push(n);
+        created.push(n);
+      }
+    }
+  }
+
+  // Auto-resolve density alerts when fish count is reduced
+  db.notifications.filter(n => !n.read && n.pondId && n.title === 'Ao quá mật độ - cần san cá').forEach(n => {
+    const pond = db.ponds.find(p => p._id === n.pondId);
+    if (!pond || pond.area <= 0) { n.read = true; return; }
+    let totalFish = 0; let speciesDensity = 0;
+    db.fishbatches.filter(b => b.status === 'active').forEach(b => {
+      const inPond = (b.pondAllocations || []).find(a => a.pondId === pond._id);
+      if (inPond) { totalFish += inPond.quantity || 0; const sp = db.species.find(s => s._id === b.speciesId); if (sp && sp.densityPerM2 > speciesDensity) speciesDensity = sp.densityPerM2; }
+      else if (b.pondId === pond._id && (!b.pondAllocations || b.pondAllocations.length === 0)) { totalFish += b.currentQuantity || 0; const sp = db.species.find(s => s._id === b.speciesId); if (sp && sp.densityPerM2 > speciesDensity) speciesDensity = sp.densityPerM2; }
+    });
+    if (speciesDensity <= 0 || totalFish <= 0) { n.read = true; return; }
+    const maxFish = Math.floor(pond.area * speciesDensity);
+    if (totalFish / maxFish <= 1.2) n.read = true;
   });
 
   if (created.length > 0) saveDb();
@@ -2529,6 +2617,21 @@ app.post('/api/factory-reset', authMiddleware, (req, res) => {
 // ── SYSADMIN ROUTES (Platform Admin) ──
 // ══════════════════════════════════════════════════════════════
 
+// Admin activity logging
+function logAdminAction(adminId, action, details = {}) {
+  if (!db.adminLogs) db.adminLogs = [];
+  const admin = db.sysadmins.find(a => a._id === adminId);
+  db.adminLogs.unshift({
+    _id: genId(),
+    adminId,
+    adminEmail: admin?.email || '',
+    action,
+    details,
+    createdAt: new Date().toISOString(),
+  });
+  if (db.adminLogs.length > 500) db.adminLogs.length = 500;
+}
+
 // Seed default sysadmin on first boot
 async function seedSysadmin() {
   if (db.sysadmins.length === 0) {
@@ -2616,6 +2719,47 @@ app.get('/api/sysadmin/dashboard', sysadminMiddleware, (req, res) => {
       };
     });
 
+  // Expiring licenses (within 7 days)
+  const now = new Date();
+  const sevenDaysLater = new Date(now.getTime() + 7 * 24 * 60 * 60 * 1000);
+  const expiringLicenses = db.licenses
+    .filter(l => l.status === 'active' && new Date(l.expiresAt) > now && new Date(l.expiresAt) <= sevenDaysLater)
+    .map(l => {
+      const store = db.branches.find(b => (b.storeId || b._id) === l.storeId);
+      const owner = db.employees.find(e => e.storeId === l.storeId && e.role === 'owner');
+      return {
+        _id: l._id,
+        storeId: l.storeId,
+        storeName: store?.name || 'N/A',
+        ownerEmail: owner?.email || '',
+        plan: l.plan,
+        expiresAt: l.expiresAt,
+        daysLeft: Math.ceil((new Date(l.expiresAt) - now) / (24 * 60 * 60 * 1000)),
+      };
+    })
+    .sort((a, b) => a.daysLeft - b.daysLeft);
+
+  // Registration stats by month (last 6 months)
+  const monthStats = [];
+  for (let i = 5; i >= 0; i--) {
+    const d = new Date(now.getFullYear(), now.getMonth() - i, 1);
+    const nextMonth = new Date(d.getFullYear(), d.getMonth() + 1, 1);
+    const count = uniqueStores.filter(s => {
+      const created = new Date(s.createdAt);
+      return created >= d && created < nextMonth;
+    }).length;
+    monthStats.push({ month: `${d.getMonth() + 1}/${d.getFullYear()}`, count });
+  }
+
+  // Plan distribution
+  const planDistribution = { trial: 0, basic: 0, pro: 0, enterprise: 0 };
+  db.licenses.filter(l => l.status === 'active').forEach(l => {
+    if (planDistribution.hasOwnProperty(l.plan)) planDistribution[l.plan]++;
+  });
+
+  // Suspended stores count
+  const suspendedStores = uniqueStores.filter(s => s.status === 'suspended').length;
+
   res.json({
     totalStores,
     totalEmployees,
@@ -2624,7 +2768,11 @@ app.get('/api/sysadmin/dashboard', sysadminMiddleware, (req, res) => {
     activeLicenses,
     expiredLicenses,
     trialStores,
+    suspendedStores,
     recentStores,
+    expiringLicenses,
+    monthStats,
+    planDistribution,
   });
 });
 
@@ -2731,6 +2879,7 @@ app.put('/api/sysadmin/stores/:id/status', sysadminMiddleware, (req, res) => {
   const branches = db.branches.filter(b => (b.storeId || b._id) === storeId);
   if (branches.length === 0) return res.status(404).json({ message: 'Cửa hàng không tồn tại' });
   branches.forEach(b => b.status = status);
+  logAdminAction(req.admin.id, status === 'active' ? 'activate_store' : 'suspend_store', { storeId, storeName: branches[0]?.name });
   saveDb();
   res.json({ message: `Đã ${status === 'active' ? 'kích hoạt' : 'tạm ngưng'} cửa hàng`, status });
 });
@@ -2773,6 +2922,7 @@ app.put('/api/sysadmin/stores/:id/license', sysadminMiddleware, (req, res) => {
     }
     if (plan) license.plan = plan;
   }
+  logAdminAction(req.admin.id, 'update_license', { storeId, plan: license.plan, expiresAt: license.expiresAt, addDays });
   saveDb();
   res.json({ message: 'Đã cập nhật license', license });
 });
@@ -2816,6 +2966,7 @@ app.post('/api/sysadmin/licenses', sysadminMiddleware, (req, res) => {
   db.licenses.push(license);
   // Also activate the store
   db.branches.filter(b => (b.storeId || b._id) === storeId).forEach(b => b.status = 'active');
+  logAdminAction(req.admin.id, 'create_license', { storeId, plan, durationDays: parseInt(durationDays), key });
   saveDb();
   res.status(201).json(license);
 });
@@ -2833,6 +2984,8 @@ app.put('/api/sysadmin/licenses/:id', sysadminMiddleware, (req, res) => {
 app.delete('/api/sysadmin/licenses/:id', sysadminMiddleware, (req, res) => {
   const idx = db.licenses.findIndex(l => l._id === req.params.id);
   if (idx === -1) return res.status(404).json({ message: 'License không tồn tại' });
+  const deleted = db.licenses[idx];
+  logAdminAction(req.admin.id, 'delete_license', { licenseKey: deleted.key, storeId: deleted.storeId });
   db.licenses.splice(idx, 1);
   saveDb();
   res.json({ message: 'Đã xóa license' });
@@ -2848,8 +3001,80 @@ app.put('/api/sysadmin/password', sysadminMiddleware, async (req, res) => {
   const valid = await bcrypt.compare(currentPassword, admin.password);
   if (!valid) return res.status(401).json({ message: 'Mật khẩu hiện tại không đúng' });
   admin.password = await bcrypt.hash(newPassword, 10);
+  logAdminAction(req.admin.id, 'change_password', {});
   saveDb();
   res.json({ message: 'Đổi mật khẩu thành công' });
+});
+
+// ── Admin Reset Store Owner Password ──
+app.put('/api/sysadmin/stores/:id/reset-password', sysadminMiddleware, async (req, res) => {
+  const storeId = req.params.id;
+  const newPassword = req.body.newPassword || '123456';
+  if (newPassword.length < 6) return res.status(400).json({ message: 'Mật khẩu phải có ít nhất 6 ký tự' });
+  const storeEmployees = db.employees.filter(e => e.storeId === storeId && e.hasAccount !== false);
+  if (storeEmployees.length === 0) return res.status(404).json({ message: 'Không tìm thấy tài khoản nào trong cửa hàng' });
+  const hashed = await bcrypt.hash(newPassword, 10);
+  let count = 0;
+  const resetEmails = [];
+  for (const emp of storeEmployees) {
+    if (emp.role === 'owner') {
+      emp.password = hashed;
+      count++;
+      resetEmails.push(emp.email || emp.phone || emp.username || '');
+    }
+  }
+  if (count === 0) return res.status(404).json({ message: 'Không tìm thấy tài khoản owner' });
+  const storeName = db.branches.find(b => (b.storeId || b._id) === storeId)?.name || '';
+  logAdminAction(req.admin.id, 'reset_store_password', { storeId, storeName, resetEmails, resetCount: count });
+  saveDb();
+  res.json({ message: `Đã reset mật khẩu cho ${count} tài khoản owner thành "${newPassword}"`, resetCount: count, resetEmails });
+});
+
+// ── Admin Activity Logs ──
+app.get('/api/sysadmin/logs', sysadminMiddleware, (req, res) => {
+  const logs = (db.adminLogs || []).slice(0, 200).map(l => {
+    let description = '';
+    switch (l.action) {
+      case 'activate_store': description = `Kích hoạt cửa hàng "${l.details.storeName || ''}"`; break;
+      case 'suspend_store': description = `Tạm ngưng cửa hàng "${l.details.storeName || ''}"`; break;
+      case 'update_license': description = `Cập nhật license cho store ${l.details.storeId?.substring(0, 8) || ''} (${l.details.plan || ''})`; break;
+      case 'create_license': description = `Tạo license ${l.details.key || ''} (${l.details.plan || ''}, ${l.details.durationDays || 0} ngày)`; break;
+      case 'delete_license': description = `Xóa license ${l.details.licenseKey || ''}`; break;
+      case 'reset_store_password': description = `Reset mật khẩu cửa hàng "${l.details.storeName || ''}" (${l.details.resetCount || 0} TK)`; break;
+      case 'change_password': description = 'Đổi mật khẩu admin'; break;
+      default: description = l.action;
+    }
+    return { ...l, description };
+  });
+  res.json(logs);
+});
+
+// ── Export Stores CSV ──
+app.get('/api/sysadmin/export/stores', sysadminMiddleware, (req, res) => {
+  const storeMap = new Map();
+  db.branches.forEach(b => {
+    const sid = b.storeId || b._id;
+    if (!storeMap.has(sid)) storeMap.set(sid, { ...b, storeId: sid });
+  });
+  const rows = [['Tên cửa hàng', 'Email chủ', 'SĐT', 'Gói DV', 'Ngày hết hạn', 'Trạng thái', 'Số NV', 'Số ao', 'Ngày tạo'].join(',')];
+  [...storeMap.values()].forEach(store => {
+    const sid = store.storeId;
+    const owner = db.employees.find(e => e.storeId === sid && e.role === 'owner');
+    const license = db.licenses.find(l => l.storeId === sid && l.status === 'active');
+    const empCount = db.employees.filter(e => e.storeId === sid).length;
+    const pondCount = db.ponds.filter(p => p.storeId === sid).length;
+    const esc = (s) => `"${(s || '').replace(/"/g, '""')}"`;
+    rows.push([
+      esc(store.name), esc(owner?.email), esc(owner?.phone),
+      esc(license?.plan), esc(license?.expiresAt ? new Date(license.expiresAt).toLocaleDateString('vi-VN') : ''),
+      esc(store.status || 'active'), empCount, pondCount,
+      esc(store.createdAt ? new Date(store.createdAt).toLocaleDateString('vi-VN') : ''),
+    ].join(','));
+  });
+  logAdminAction(req.admin.id, 'export_stores', { storeCount: storeMap.size });
+  res.setHeader('Content-Type', 'text/csv; charset=utf-8');
+  res.setHeader('Content-Disposition', 'attachment; filename=stores.csv');
+  res.send('\uFEFF' + rows.join('\n'));
 });
 
 // ── Load persisted DB or use seed data ──
@@ -2861,6 +3086,7 @@ if (savedDb) {
   // Ensure new collections exist in old data
   if (!db.sysadmins) db.sysadmins = [];
   if (!db.licenses) db.licenses = [];
+  if (!db.adminLogs) db.adminLogs = [];
   console.log('Loaded data from', DB_FILE);
 }
 

@@ -85,6 +85,13 @@ class _MainScreenState extends State<MainScreen> with TickerProviderStateMixin {
       if (auth.user != null) {
         dp.setToken(auth.user!.token);
       }
+      // Auto-logout on 401 (expired token)
+      dp.onUnauthorized = () async {
+        if (!mounted) return;
+        dp.onUnauthorized = null; // fire only once
+        await auth.signOut();
+        if (mounted) Navigator.pushReplacementNamed(context, '/login');
+      };
       dp.loadAll().then((_) {
         // Start periodic notification checks + midnight overdue refresh after data loaded
         NotificationService.startPeriodicCheck(dp);
@@ -1572,6 +1579,19 @@ class _MainScreenState extends State<MainScreen> with TickerProviderStateMixin {
                           onChanged: (v) => ss(() => item['unitPrice'] = double.tryParse(v) ?? 0),
                         )),
                       ]),
+                      // Show conversion info (raw → processed)
+                      if (prod != null && prod.hasConversion && qty > 0)
+                        Padding(
+                          padding: const EdgeInsets.only(top: 6),
+                          child: Row(children: [
+                            Icon(Icons.sync_alt, size: 14, color: Colors.indigo.shade400),
+                            const SizedBox(width: 6),
+                            Text(
+                              '${_smartQty(qty)} ${prod.unit} × ${prod.conversionRatio} = ${_smartQty(qty * prod.conversionRatio)} ${prod.processedUnit.isNotEmpty ? prod.processedUnit : prod.unit} thành phẩm',
+                              style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: Colors.indigo.shade600),
+                            ),
+                          ]),
+                        ),
                     ]),
                   );
                 }),
@@ -1850,16 +1870,9 @@ class _MainScreenState extends State<MainScreen> with TickerProviderStateMixin {
                     onChanged: (v) => ss(() => zoneId = v),
                   ),
                 const SizedBox(height: 16),
-                DropdownButtonFormField<String>(
+                _PondTypeAutocomplete(
                   initialValue: type,
-                  decoration: const InputDecoration(labelText: 'Loại ao', prefixIcon: Icon(Icons.water)),
-                  items: const [
-                    DropdownMenuItem(value: 'earth', child: Text('Ao đất')),
-                    DropdownMenuItem(value: 'hdpe', child: Text('Ao HDPE')),
-                    DropdownMenuItem(value: 'glass', child: Text('Bể kính')),
-                    DropdownMenuItem(value: 'cage', child: Text('Lồng')),
-                  ],
-                  onChanged: (v) => ss(() => type = v!),
+                  onChanged: (v) => ss(() => type = v),
                 ),
                 const SizedBox(height: 20),
                 const Align(alignment: Alignment.centerLeft, child: Text('Kích thước', style: TextStyle(fontWeight: FontWeight.w700, fontSize: 14))),
@@ -2369,9 +2382,14 @@ class _MainScreenState extends State<MainScreen> with TickerProviderStateMixin {
       if (isEdit) {
         await dp.update('fishbatches', existing.id, data);
       } else {
-        await dp.create('fishbatches', data);
+        final created = await dp.create('fishbatches', data);
+        if (!created) {
+          for (final c in allocs) { (c['controller'] as TextEditingController).dispose(); }
+          _showSnack('Thêm lô cá thất bại. Vui lòng thử lại.');
+          return;
+        }
       }
-      // Tự kích hoạt ao khi thả cá
+      // Tự kích hoạt ao khi thả cá (dùng update trực tiếp API, không cascade reload fishbatches lại)
       for (final a in pondAllocs) {
         final pid = a['pondId'] as String;
         final pond = dp.ponds.where((p) => p.id == pid).firstOrNull;
@@ -2379,6 +2397,8 @@ class _MainScreenState extends State<MainScreen> with TickerProviderStateMixin {
           await dp.update('ponds', pid, {...pond.toJson(), 'status': 'active'});
         }
       }
+      // Reload fishbatches lần cuối để đảm bảo dữ liệu đồng bộ
+      await dp.reload('fishbatches');
       for (final c in allocs) { (c['controller'] as TextEditingController).dispose(); }
       _showSnack(isEdit ? 'Đã cập nhật lô cá' : 'Đã thêm lô cá');
     } else {
@@ -3465,6 +3485,8 @@ class _MainScreenState extends State<MainScreen> with TickerProviderStateMixin {
     final priceC = TextEditingController(text: existing != null ? existing.price.toString() : '');
     final stockC = TextEditingController(text: existing != null ? existing.stock.toString() : '');
     final minC = TextEditingController(text: existing != null ? existing.minStock.toString() : '');
+    final convRatioC = TextEditingController(text: existing != null && existing.conversionRatio > 0 ? existing.conversionRatio.toString() : '');
+    final procUnitC = TextEditingController(text: existing?.processedUnit ?? '');
     String category = existing?.category ?? 'feed';
 
     final ok = await showDialog<bool>(
@@ -3504,6 +3526,16 @@ class _MainScreenState extends State<MainScreen> with TickerProviderStateMixin {
               TextField(controller: stockC, decoration: const InputDecoration(labelText: 'Tồn kho hiện tại', prefixIcon: Icon(Icons.inventory)), keyboardType: TextInputType.number, inputFormatters: [FilteringTextInputFormatter.allow(RegExp(r'^\d*\.?\d*'))]),
               const SizedBox(height: 12),
               TextField(controller: minC, decoration: const InputDecoration(labelText: 'Mức tối thiểu', prefixIcon: Icon(Icons.low_priority)), keyboardType: TextInputType.number, inputFormatters: [FilteringTextInputFormatter.allow(RegExp(r'^\d*\.?\d*'))]),
+              const SizedBox(height: 16),
+              const Align(alignment: Alignment.centerLeft, child: Text('Quy đổi nguyên liệu → thành phẩm', style: TextStyle(fontWeight: FontWeight.w700, fontSize: 14))),
+              const SizedBox(height: 4),
+              const Text('VD: 1 gói ART ấp ra 3kg ART ủ → hệ số = 3', style: TextStyle(fontSize: 12, color: Colors.grey)),
+              const SizedBox(height: 8),
+              Row(children: [
+                Expanded(child: TextField(controller: convRatioC, decoration: const InputDecoration(labelText: 'Hệ số quy đổi', prefixIcon: Icon(Icons.sync_alt), hintText: 'VD: 3'), keyboardType: TextInputType.number, inputFormatters: [FilteringTextInputFormatter.allow(RegExp(r'^\d*\.?\d*'))])),
+                const SizedBox(width: 12),
+                Expanded(child: TextField(controller: procUnitC, decoration: const InputDecoration(labelText: 'ĐV thành phẩm', prefixIcon: Icon(Icons.straighten), hintText: 'VD: kg'))),
+              ]),
             ]),
           ),
           ),
@@ -3534,6 +3566,8 @@ class _MainScreenState extends State<MainScreen> with TickerProviderStateMixin {
         'price': double.tryParse(priceC.text) ?? 0,
         'stock': double.tryParse(stockC.text) ?? 0,
         'minStock': double.tryParse(minC.text) ?? 0,
+        'conversionRatio': double.tryParse(convRatioC.text) ?? 0,
+        'processedUnit': procUnitC.text.trim(),
       };
       if (isEdit) {
         await dp.update('products', existing.id, data);
@@ -5753,4 +5787,78 @@ class _DataStatItem {
   final int count;
   final Color color;
   const _DataStatItem(this.icon, this.label, this.count, this.color);
+}
+
+/// Pond type combo: preset options + free text input
+class _PondTypeAutocomplete extends StatefulWidget {
+  final String initialValue;
+  final ValueChanged<String> onChanged;
+  const _PondTypeAutocomplete({required this.initialValue, required this.onChanged});
+  @override
+  State<_PondTypeAutocomplete> createState() => _PondTypeAutocompleteState();
+}
+
+class _PondTypeAutocompleteState extends State<_PondTypeAutocomplete> {
+  static const _presets = <String, String>{
+    'earth': 'Ao đất',
+    'hdpe': 'Ao HDPE',
+    'glass': 'Bể kính',
+    'cage': 'Lồng',
+  };
+
+  late final TextEditingController _ctrl;
+  late String _value;
+
+  @override
+  void initState() {
+    super.initState();
+    _value = widget.initialValue;
+    _ctrl = TextEditingController(text: _presets[_value] ?? _value);
+  }
+
+  @override
+  void dispose() {
+    _ctrl.dispose();
+    super.dispose();
+  }
+
+  String _toKey(String display) {
+    final entry = _presets.entries.where((e) => e.value == display);
+    return entry.isNotEmpty ? entry.first.key : display;
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final allOptions = _presets.values.toList();
+    return Autocomplete<String>(
+      optionsBuilder: (v) {
+        if (v.text.isEmpty) return allOptions;
+        return allOptions.where((o) => o.toLowerCase().contains(v.text.toLowerCase()));
+      },
+      fieldViewBuilder: (ctx, textCtrl, focusNode, onSubmitted) {
+        // Sync controller text on first build
+        if (textCtrl.text.isEmpty && _ctrl.text.isNotEmpty) {
+          textCtrl.text = _ctrl.text;
+        }
+        return TextField(
+          controller: textCtrl,
+          focusNode: focusNode,
+          decoration: const InputDecoration(
+            labelText: 'Loại ao',
+            prefixIcon: Icon(Icons.water),
+            hintText: 'Chọn hoặc nhập loại ao mới',
+          ),
+          onChanged: (v) {
+            _value = _toKey(v);
+            widget.onChanged(_value);
+          },
+          onSubmitted: (_) => onSubmitted(),
+        );
+      },
+      onSelected: (v) {
+        _value = _toKey(v);
+        widget.onChanged(_value);
+      },
+    );
+  }
 }
