@@ -2219,6 +2219,7 @@ class _MainScreenState extends State<MainScreen> with TickerProviderStateMixin {
           final availPonds = pondsForBranch(branchId);
           final totalAlloc = allocs.fold<int>(0, (s, a) => s + (int.tryParse((a['controller'] as TextEditingController).text) ?? 0));
           final initQty = int.tryParse(qtyC.text) ?? 0;
+          final canAdd = speciesId != null && (isEdit || initQty > 0);
 
           return AlertDialog(
             title: Text(isEdit ? 'Sửa lô cá' : 'Thêm lô cá'),
@@ -2226,6 +2227,45 @@ class _MainScreenState extends State<MainScreen> with TickerProviderStateMixin {
               constraints: const BoxConstraints(maxWidth: AppSizes.dialogMaxWidth, maxHeight: AppSizes.dialogMaxHeight),
               child: SingleChildScrollView(
                 child: Column(mainAxisSize: MainAxisSize.min, children: [
+                  // Warning when missing species
+                  if (dp.species.isEmpty)
+                    Container(
+                      width: double.infinity,
+                      margin: const EdgeInsets.only(bottom: 12),
+                      padding: const EdgeInsets.all(12),
+                      decoration: BoxDecoration(
+                        color: Colors.orange.shade50,
+                        borderRadius: BorderRadius.circular(8),
+                        border: Border.all(color: Colors.orange.shade300),
+                      ),
+                      child: Row(children: [
+                        Icon(Icons.warning_amber_rounded, color: Colors.orange.shade700, size: 24),
+                        const SizedBox(width: 10),
+                        const Expanded(child: Text(
+                          'Bạn chưa có loài cá/tôm nào. Vui lòng vào Danh mục → Loài cá để thêm trước khi tạo lô.',
+                          style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600),
+                        )),
+                      ]),
+                    ),
+                  if (dp.ponds.isEmpty)
+                    Container(
+                      width: double.infinity,
+                      margin: const EdgeInsets.only(bottom: 12),
+                      padding: const EdgeInsets.all(12),
+                      decoration: BoxDecoration(
+                        color: Colors.orange.shade50,
+                        borderRadius: BorderRadius.circular(8),
+                        border: Border.all(color: Colors.orange.shade300),
+                      ),
+                      child: Row(children: [
+                        Icon(Icons.warning_amber_rounded, color: Colors.orange.shade700, size: 24),
+                        const SizedBox(width: 10),
+                        const Expanded(child: Text(
+                          'Bạn chưa có ao nuôi nào. Vui lòng vào Ao nuôi → Thêm ao trước.',
+                          style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600),
+                        )),
+                      ]),
+                    ),
                   // === Tên lô ===
                   TextField(controller: nameC, decoration: const InputDecoration(labelText: 'Tên lô cá', prefixIcon: Icon(Icons.label))),
                   const SizedBox(height: 12),
@@ -2376,7 +2416,7 @@ class _MainScreenState extends State<MainScreen> with TickerProviderStateMixin {
             ),
             actions: [
               TextButton(onPressed: () => Navigator.pop(dCtx, false), child: const Text('Huỷ')),
-              FilledButton(onPressed: () => Navigator.pop(dCtx, true), child: Text(isEdit ? 'Cập nhật' : 'Thêm')),
+              FilledButton(onPressed: canAdd ? () => Navigator.pop(dCtx, true) : null, child: Text(isEdit ? 'Cập nhật' : 'Thêm')),
             ],
           );
         },
