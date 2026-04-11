@@ -687,6 +687,20 @@ smRouter.delete('/:id', (req, res) => {
 });
 app.use('/api/sizemeasurements', smRouter);
 
+// ── Audit log endpoint (must be before CRUD mount to avoid /:id collision) ──
+app.get('/api/auditlogs/paymentvouchers', authMiddleware, (req, res) => {
+  const logs = (db.auditlogs || [])
+    .filter(l => l.resource === 'paymentvouchers')
+    .sort((a, b) => new Date(b.timestamp) - new Date(a.timestamp));
+  const page = parseInt(req.query.page) || 0;
+  const limit = parseInt(req.query.limit) || 50;
+  if (page > 0) {
+    const start = (page - 1) * limit;
+    return res.json({ data: logs.slice(start, start + limit), total: logs.length, page, limit });
+  }
+  res.json(logs.slice(0, limit));
+});
+
 // ── Mount simple CRUD routes ──
 const simpleResources = [
   'branches', 'zones', 'species', 'fishbatches',
@@ -2009,20 +2023,6 @@ pvRouter.delete('/:id', (req, res) => {
 });
 
 app.use('/api/paymentvouchers', pvRouter);
-
-// Audit log endpoint for viewing financial audit trail
-app.get('/api/auditlogs/paymentvouchers', authMiddleware, (req, res) => {
-  const logs = db.auditlogs
-    .filter(l => l.resource === 'paymentvouchers')
-    .sort((a, b) => new Date(b.timestamp) - new Date(a.timestamp));
-  const page = parseInt(req.query.page) || 0;
-  const limit = parseInt(req.query.limit) || 50;
-  if (page > 0) {
-    const start = (page - 1) * limit;
-    return res.json({ data: logs.slice(start, start + limit), total: logs.length, page, limit });
-  }
-  res.json(logs.slice(0, limit));
-});
 
 // ════════════════════════════════════════════════════════════════════════════
 // EXPORT – CSV endpoints for all resources
