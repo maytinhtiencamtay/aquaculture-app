@@ -293,7 +293,6 @@ class _PaymentVoucherViewState extends State<PaymentVoucherView> with SingleTick
       firstDate: DateTime(2020),
       lastDate: DateTime(2030),
       initialDateRange: _dateRange,
-      locale: const Locale('vi'),
     );
     if (range != null) setState(() => _dateRange = range);
   }
@@ -661,11 +660,14 @@ class _PaymentVoucherViewState extends State<PaymentVoucherView> with SingleTick
                   InkWell(
                     onTap: () async {
                       final d = await showDatePicker(context: ctx, initialDate: selectedDate, firstDate: DateTime(2020), lastDate: DateTime(2030));
-                      if (d != null) setDState(() => selectedDate = d);
+                      if (d != null) {
+                        final t = await showTimePicker(context: ctx, initialTime: TimeOfDay.fromDateTime(selectedDate));
+                        setDState(() => selectedDate = DateTime(d.year, d.month, d.day, t?.hour ?? selectedDate.hour, t?.minute ?? selectedDate.minute));
+                      }
                     },
                     child: InputDecorator(
-                      decoration: const InputDecoration(labelText: 'Ngày', prefixIcon: Icon(Icons.calendar_today)),
-                      child: Text(_dateFmt.format(selectedDate)),
+                      decoration: const InputDecoration(labelText: 'Ngày giờ', prefixIcon: Icon(Icons.calendar_today)),
+                      child: Text(DateFormat('dd/MM/yyyy HH:mm').format(selectedDate)),
                     ),
                   ),
                   const SizedBox(height: 12),

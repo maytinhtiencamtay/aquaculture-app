@@ -42,6 +42,21 @@
       "hasAccount": false,
       "permissions": [],
       "createdAt": "2026-02-01T00:00:00.000Z"
+    },
+    {
+      "_id": "5c20e2ea-952e-4c6e-a1ed-ff193edca6f3",
+      "name": "demo",
+      "storeName": "demo",
+      "username": "demo",
+      "email": "",
+      "phone": "0935364556",
+      "address": "",
+      "password": "$2a$10$1VtiYntK32NWitTGnPm0cO0phzDB1tq.AaDxuDXNBNNhgURUoDqv2",
+      "role": "owner",
+      "storeId": "a7bf9b47-aa07-4607-8280-681b5cf2191f",
+      "hasAccount": true,
+      "permissions": [],
+      "createdAt": "2026-04-16T08:13:35.680Z"
     }
   ],
   "branches": [
@@ -62,6 +77,15 @@
       "manager": "Phạm Thị D",
       "storeId": "1",
       "createdAt": "2026-02-01T00:00:00.000Z"
+    },
+    {
+      "_id": "a7bf9b47-aa07-4607-8280-681b5cf2191f",
+      "name": "demo",
+      "address": "",
+      "contact": "0935364556",
+      "manager": "demo",
+      "storeId": "a7bf9b47-aa07-4607-8280-681b5cf2191f",
+      "createdAt": "2026-04-16T08:13:35.680Z"
     }
   ],
   "zones": [
@@ -104,6 +128,14 @@
       "storeId": "1",
       "type": "farming",
       "createdAt": "2026-02-01T00:00:00.000Z"
+    },
+    {
+      "_id": "f955000c-5f18-4738-ba30-4d06d19c001f",
+      "name": "Khu A",
+      "branchId": "a7bf9b47-aa07-4607-8280-681b5cf2191f",
+      "type": "farming",
+      "storeId": "a7bf9b47-aa07-4607-8280-681b5cf2191f",
+      "createdAt": "2026-04-16T08:14:22.739Z"
     }
   ],
   "ponds": [
@@ -220,6 +252,27 @@
       "measuredBy": "3",
       "createdAt": "2026-02-01T00:00:00.000Z",
       "updatedAt": "2026-06-01T00:00:00.000Z"
+    },
+    {
+      "_id": "88dfcaad-321c-42d6-8bbb-41e4ef29860e",
+      "code": "A1",
+      "zoneId": "f955000c-5f18-4738-ba30-4d06d19c001f",
+      "area": 0,
+      "volume": 0,
+      "depth": 0,
+      "type": "earth",
+      "status": "active",
+      "currentTemp": null,
+      "currentPh": null,
+      "currentDo": null,
+      "currentNh3": null,
+      "currentAlkalinity": null,
+      "measuredBy": "",
+      "storeId": "a7bf9b47-aa07-4607-8280-681b5cf2191f",
+      "createdAt": "2026-04-16T08:14:29.450Z",
+      "mapX": null,
+      "mapY": null,
+      "updatedAt": "2026-04-16T08:17:30.097Z"
     }
   ],
   "species": [
@@ -294,6 +347,24 @@
       "densityPerM2": 3,
       "createdAt": "2026-01-01T00:00:00.000Z",
       "updatedAt": "2026-01-01T00:00:00.000Z"
+    },
+    {
+      "_id": "c2b9c21c-ab44-48f9-aa1c-d875ac801d8f",
+      "name": "cá mú",
+      "description": "",
+      "imageUrl": "",
+      "requiredTemp": 28,
+      "minTemp": 20,
+      "maxTemp": 35,
+      "requiredPh": 7,
+      "requiredDo": 4,
+      "maxNh3": 0.1,
+      "feedRatio": 1.5,
+      "harvestableWeight": 500,
+      "growthDays": 180,
+      "densityPerM2": 5,
+      "storeId": "a7bf9b47-aa07-4607-8280-681b5cf2191f",
+      "createdAt": "2026-04-16T08:16:05.103Z"
     }
   ],
   "fishbatches": [
@@ -417,6 +488,41 @@
       "inspectedBy": "",
       "storeId": "1",
       "createdAt": "2026-04-10T16:25:17.621Z"
+    },
+    {
+      "_id": "fcca81e2-9ee2-4c69-aa7d-a2f03686a5ca",
+      "name": "",
+      "branchId": "a7bf9b47-aa07-4607-8280-681b5cf2191f",
+      "pondId": "88dfcaad-321c-42d6-8bbb-41e4ef29860e",
+      "speciesId": "c2b9c21c-ab44-48f9-aa1c-d875ac801d8f",
+      "pondAllocations": [
+        {
+          "pondId": "88dfcaad-321c-42d6-8bbb-41e4ef29860e",
+          "quantity": 5000
+        }
+      ],
+      "stockingDate": "2026-04-16T15:16:12.409",
+      "initialQuantity": 5000,
+      "initialSize": 5,
+      "initialWeight": 50,
+      "importPrice": 500,
+      "currentQuantity": 5000,
+      "currentSize": 0,
+      "currentWeight": 0,
+      "mortalityQuantity": 0,
+      "feedConsumed": 0,
+      "expectedHarvestDate": null,
+      "status": "active",
+      "source": "",
+      "note": "",
+      "createdBy": "5c20e2ea-952e-4c6e-a1ed-ff193edca6f3",
+      "inspectedBy": "",
+      "storeId": "a7bf9b47-aa07-4607-8280-681b5cf2191f",
+      "createdAt": "2026-04-16T08:16:27.998Z",
+      "harvestDate": null,
+      "harvestWeight": 0,
+      "harvestQuantity": 0,
+      "updatedAt": "2026-04-16T08:17:29.864Z"
     }
   ],
   "products": [
@@ -491,6 +597,20 @@
       "minStock": 20,
       "storeId": "1",
       "createdAt": "2026-01-01T00:00:00.000Z"
+    },
+    {
+      "_id": "86fa27c1-f58c-4290-8193-9d5ef6f7e9d5",
+      "sku": "",
+      "name": "cám",
+      "category": "feed",
+      "unit": "kg",
+      "price": 300000,
+      "stock": 20,
+      "minStock": 0,
+      "conversionRatio": 0,
+      "processedUnit": "",
+      "storeId": "a7bf9b47-aa07-4607-8280-681b5cf2191f",
+      "createdAt": "2026-04-16T08:15:09.505Z"
     }
   ],
   "purchaseorders": [
@@ -955,6 +1075,30 @@
       "issuedTo": "3",
       "approvedBy": "1",
       "createdAt": "2026-03-10T00:00:00.000Z"
+    },
+    {
+      "_id": "2470ec83-1fc3-489c-8059-538ee64e8373",
+      "code": "XK-001",
+      "date": "2026-04-16T12:58:00.000",
+      "type": "feeding",
+      "pondId": "88dfcaad-321c-42d6-8bbb-41e4ef29860e",
+      "fishBatchId": "fcca81e2-9ee2-4c69-aa7d-a2f03686a5ca",
+      "branchId": "a7bf9b47-aa07-4607-8280-681b5cf2191f",
+      "items": [
+        {
+          "productId": "86fa27c1-f58c-4290-8193-9d5ef6f7e9d5",
+          "productName": "cám",
+          "qty": 3.8,
+          "unitPrice": 300000,
+          "unit": "kg"
+        }
+      ],
+      "totalAmount": 1140000,
+      "status": "draft",
+      "note": "Cho cá ăn Ao A1, cá mú: SL 5000 con, TL: 50g, KT: 5.0cm",
+      "createdBy": "",
+      "issuedTo": "",
+      "createdAt": "2026-04-16T08:58:40.563Z"
     }
   ],
   "stocktakes": [],
@@ -1188,6 +1332,18 @@
       "createdAt": "2026-04-10T11:29:06.872Z"
     }
   ],
-  "licenses": [],
+  "licenses": [
+    {
+      "_id": "7954f111-83a6-4314-baaa-cc567de664e7",
+      "key": "AQ-TRIAL-9CB79A335D",
+      "storeId": "a7bf9b47-aa07-4607-8280-681b5cf2191f",
+      "plan": "trial",
+      "durationDays": 30,
+      "status": "active",
+      "note": "Dùng thử 30 ngày",
+      "createdAt": "2026-04-16T08:13:35.680Z",
+      "expiresAt": "2026-05-16T08:13:35.680Z"
+    }
+  ],
   "adminLogs": []
 }

@@ -527,6 +527,22 @@ class _AquaOperationsViewState extends State<AquaOperationsView> with TickerProv
           content: SizedBox(
             width: 480,
             child: SingleChildScrollView(child: Column(mainAxisSize: MainAxisSize.min, children: [
+              // Ngày bắt đầu
+              InkWell(
+                onTap: () async {
+                  final d = await showDatePicker(context: ctx, initialDate: startDate, firstDate: DateTime(2020), lastDate: DateTime.now().add(const Duration(days: 30)));
+                  if (d != null) {
+                    final t = await showTimePicker(context: ctx, initialTime: TimeOfDay.fromDateTime(startDate));
+                    setSt(() => startDate = DateTime(d.year, d.month, d.day, t?.hour ?? startDate.hour, t?.minute ?? startDate.minute));
+                  }
+                },
+                borderRadius: BorderRadius.circular(12),
+                child: InputDecorator(
+                  decoration: const InputDecoration(labelText: 'Ngày giờ bắt đầu điều trị', prefixIcon: Icon(Icons.calendar_today)),
+                  child: Text(DateFormat('dd/MM/yyyy HH:mm').format(startDate)),
+                ),
+              ),
+              const SizedBox(height: 10),
               TextField(controller: medC, decoration: const InputDecoration(labelText: 'Tên thuốc / hóa chất *', prefixIcon: Icon(Icons.medical_services))),
               const SizedBox(height: 10),
               Row(children: [
@@ -723,6 +739,7 @@ class _AquaOperationsViewState extends State<AquaOperationsView> with TickerProv
     String productId = existing?.productId ?? '';
     bool active = existing?.isActive ?? true;
     List<String> times = List.from(existing?.feedingTimes ?? ['06:00', '11:00', '17:00']);
+    DateTime selectedDate = existing?.createdAt ?? DateTime.now();
 
     final ok = await showDialog<bool>(
       context: context,
@@ -749,6 +766,21 @@ class _AquaOperationsViewState extends State<AquaOperationsView> with TickerProv
           content: SizedBox(
             width: 450,
             child: SingleChildScrollView(child: Column(mainAxisSize: MainAxisSize.min, children: [
+              InkWell(
+                onTap: () async {
+                  final d = await showDatePicker(context: ctx, initialDate: selectedDate, firstDate: DateTime(2020), lastDate: DateTime.now());
+                  if (d != null) {
+                    final t = await showTimePicker(context: ctx, initialTime: TimeOfDay.fromDateTime(selectedDate));
+                    setSt(() => selectedDate = DateTime(d.year, d.month, d.day, t?.hour ?? selectedDate.hour, t?.minute ?? selectedDate.minute));
+                  }
+                },
+                borderRadius: BorderRadius.circular(12),
+                child: InputDecorator(
+                  decoration: const InputDecoration(labelText: 'Ngày giờ bắt đầu', prefixIcon: Icon(Icons.calendar_today)),
+                  child: Text(DateFormat('dd/MM/yyyy HH:mm').format(selectedDate)),
+                ),
+              ),
+              const SizedBox(height: 10),
               DropdownButtonFormField<String>(
                 value: pondId.isEmpty ? null : pondId,
                 decoration: const InputDecoration(labelText: 'Ao *', prefixIcon: Icon(Icons.pool)),
@@ -879,7 +911,7 @@ class _AquaOperationsViewState extends State<AquaOperationsView> with TickerProv
         'timesPerDay': int.tryParse(timesC.text) ?? 3,
         'feedingTimes': times,
         'rationPercent': double.tryParse(ratioC.text) ?? 3,
-        'startDate': DateTime.now().toIso8601String(),
+        'startDate': selectedDate.toIso8601String(),
         'isActive': active, 'note': noteC.text,
       };
       if (isEdit) {
@@ -2050,6 +2082,22 @@ class _AquaOperationsViewState extends State<AquaOperationsView> with TickerProv
           content: SizedBox(
             width: 420,
             child: SingleChildScrollView(child: Column(mainAxisSize: MainAxisSize.min, children: [
+              // Ngày ghi nhận
+              InkWell(
+                onTap: () async {
+                  final d = await showDatePicker(context: ctx, initialDate: date, firstDate: DateTime(2020), lastDate: DateTime.now());
+                  if (d != null) {
+                    final t = await showTimePicker(context: ctx, initialTime: TimeOfDay.fromDateTime(date));
+                    setSt(() => date = DateTime(d.year, d.month, d.day, t?.hour ?? date.hour, t?.minute ?? date.minute));
+                  }
+                },
+                borderRadius: BorderRadius.circular(12),
+                child: InputDecorator(
+                  decoration: const InputDecoration(labelText: 'Ngày giờ ghi nhận', prefixIcon: Icon(Icons.calendar_today)),
+                  child: Text(DateFormat('dd/MM/yyyy HH:mm').format(date)),
+                ),
+              ),
+              const SizedBox(height: 10),
               DropdownButtonFormField<String>(
                 value: pondId.isEmpty ? null : pondId,
                 decoration: const InputDecoration(labelText: 'Ao *', prefixIcon: Icon(Icons.pool)),

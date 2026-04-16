@@ -1748,13 +1748,15 @@ class _WarehouseViewState extends State<WarehouseView> with SingleTickerProvider
 
   // ── DATE PICKER HELPER ──
   Future<DateTime?> _pickDate(BuildContext context, DateTime initial) async {
-    return showDatePicker(
+    final d = await showDatePicker(
       context: context,
       initialDate: initial,
       firstDate: DateTime(2020),
       lastDate: DateTime(2030),
-      locale: const Locale('vi'),
     );
+    if (d == null) return null;
+    final t = await showTimePicker(context: context, initialTime: TimeOfDay.fromDateTime(initial));
+    return DateTime(d.year, d.month, d.day, t?.hour ?? initial.hour, t?.minute ?? initial.minute);
   }
 
   /// Generate next sequential code like PO-001, NK-002, etc.
@@ -1777,10 +1779,10 @@ class _WarehouseViewState extends State<WarehouseView> with SingleTickerProvider
       borderRadius: BorderRadius.circular(12),
       child: InputDecorator(
         decoration: const InputDecoration(
-          labelText: 'Ngày phiếu',
+          labelText: 'Ngày giờ phiếu',
           prefixIcon: Icon(Icons.calendar_today),
         ),
-        child: Text(_dateFmt.format(date), style: const TextStyle(fontSize: 14)),
+        child: Text(DateFormat('dd/MM/yyyy HH:mm').format(date), style: const TextStyle(fontSize: 14)),
       ),
     );
   }

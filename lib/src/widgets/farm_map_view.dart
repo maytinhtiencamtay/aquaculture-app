@@ -2071,6 +2071,7 @@ class _FarmMapViewState extends State<FarmMapView> {
     final volC = TextEditingController();
     String reason = 'routine';
     String source = 'well';
+    DateTime selectedDate = DateTime.now();
 
     final ok = await showDialog<bool>(
       context: context,
@@ -2080,6 +2081,21 @@ class _FarmMapViewState extends State<FarmMapView> {
           content: SizedBox(
             width: 380,
             child: Column(mainAxisSize: MainAxisSize.min, children: [
+              InkWell(
+                onTap: () async {
+                  final d = await showDatePicker(context: ctx, initialDate: selectedDate, firstDate: DateTime(2020), lastDate: DateTime.now());
+                  if (d != null) {
+                    final t = await showTimePicker(context: ctx, initialTime: TimeOfDay.fromDateTime(selectedDate));
+                    setSt(() => selectedDate = DateTime(d.year, d.month, d.day, t?.hour ?? selectedDate.hour, t?.minute ?? selectedDate.minute));
+                  }
+                },
+                borderRadius: BorderRadius.circular(12),
+                child: InputDecorator(
+                  decoration: const InputDecoration(labelText: 'Ngày giờ ghi nhận', prefixIcon: Icon(Icons.calendar_today)),
+                  child: Text(DateFormat('dd/MM/yyyy HH:mm').format(selectedDate)),
+                ),
+              ),
+              const SizedBox(height: 10),
               Row(children: [
                 Expanded(child: TextField(controller: pctC, decoration: const InputDecoration(labelText: '% thay', suffixText: '%'), keyboardType: TextInputType.number)),
                 const SizedBox(width: 8),
@@ -2121,7 +2137,7 @@ class _FarmMapViewState extends State<FarmMapView> {
     if (ok == true) {
       await dp.create('waterchangelogs', {
         'pondId': pond.id,
-        'date': DateTime.now().toIso8601String(),
+        'date': selectedDate.toIso8601String(),
         'percentChanged': double.tryParse(pctC.text) ?? 30,
         'volumeChanged': double.tryParse(volC.text) ?? 0,
         'reason': reason, 'waterSource': source,
@@ -2137,6 +2153,7 @@ class _FarmMapViewState extends State<FarmMapView> {
     final incidentC = TextEditingController();
     String shift = 'morning';
     String weather = 'sunny';
+    DateTime selectedDate = DateTime.now();
     final now = TimeOfDay.now();
     if (now.hour >= 17) shift = 'night';
     else if (now.hour >= 12) shift = 'afternoon';
@@ -2149,6 +2166,21 @@ class _FarmMapViewState extends State<FarmMapView> {
           content: SizedBox(
             width: 400,
             child: SingleChildScrollView(child: Column(mainAxisSize: MainAxisSize.min, children: [
+              InkWell(
+                onTap: () async {
+                  final d = await showDatePicker(context: ctx, initialDate: selectedDate, firstDate: DateTime(2020), lastDate: DateTime.now());
+                  if (d != null) {
+                    final t = await showTimePicker(context: ctx, initialTime: TimeOfDay.fromDateTime(selectedDate));
+                    setSt(() => selectedDate = DateTime(d.year, d.month, d.day, t?.hour ?? selectedDate.hour, t?.minute ?? selectedDate.minute));
+                  }
+                },
+                borderRadius: BorderRadius.circular(12),
+                child: InputDecorator(
+                  decoration: const InputDecoration(labelText: 'Ngày giờ ghi nhận', prefixIcon: Icon(Icons.calendar_today)),
+                  child: Text(DateFormat('dd/MM/yyyy HH:mm').format(selectedDate)),
+                ),
+              ),
+              const SizedBox(height: 10),
               Row(children: [
                 Expanded(child: DropdownButtonFormField<String>(
                   value: shift,
@@ -2192,7 +2224,7 @@ class _FarmMapViewState extends State<FarmMapView> {
     );
     if (ok == true) {
       await dp.create('dailylogs', {
-        'pondId': pond.id, 'date': DateTime.now().toIso8601String(),
+        'pondId': pond.id, 'date': selectedDate.toIso8601String(),
         'shift': shift, 'weather': weather,
         'activities': actC.text, 'feedingNote': feedC.text,
         'healthNote': healthC.text, 'incidentNote': incidentC.text,
@@ -2534,6 +2566,7 @@ class _FarmMapViewState extends State<FarmMapView> {
     String? targetPondId;
     final qtyC = TextEditingController();
     final noteC = TextEditingController();
+    DateTime selectedDate = DateTime.now();
     final otherPonds = dp.ponds.where((p) => p.id != fromPond.id).toList();
 
     if (otherPonds.isEmpty) {
@@ -2595,6 +2628,22 @@ class _FarmMapViewState extends State<FarmMapView> {
                 controller: noteC,
                 decoration: const InputDecoration(labelText: 'Ghi chú / Lý do', prefixIcon: Icon(Icons.note)),
                 maxLines: 2,
+              ),
+              const SizedBox(height: 12),
+              // Ngày chuyển
+              InkWell(
+                onTap: () async {
+                  final d = await showDatePicker(context: dCtx, initialDate: selectedDate, firstDate: DateTime(2020), lastDate: DateTime.now());
+                  if (d != null) {
+                    final t = await showTimePicker(context: dCtx, initialTime: TimeOfDay.fromDateTime(selectedDate));
+                    ss(() => selectedDate = DateTime(d.year, d.month, d.day, t?.hour ?? selectedDate.hour, t?.minute ?? selectedDate.minute));
+                  }
+                },
+                borderRadius: BorderRadius.circular(12),
+                child: InputDecorator(
+                  decoration: const InputDecoration(labelText: 'Ngày giờ chuyển', prefixIcon: Icon(Icons.calendar_today)),
+                  child: Text(DateFormat('dd/MM/yyyy HH:mm').format(selectedDate)),
+                ),
               ),
               const SizedBox(height: 16),
 
@@ -2807,7 +2856,7 @@ class _FarmMapViewState extends State<FarmMapView> {
         'toPondId': targetPondId,
         'fishBatchId': batch.id,
         'qty': transferQty,
-        'date': DateTime.now().toIso8601String(),
+        'date': selectedDate.toIso8601String(),
         'reason': noteC.text.isNotEmpty ? noteC.text : 'Chuyển cá',
       });
 
@@ -2832,6 +2881,7 @@ class _FarmMapViewState extends State<FarmMapView> {
   Future<void> _showFeedDialog(Pond pond, List<FishBatch> batches) async {
     final noteC = TextEditingController();
     String? issuedTo;
+    DateTime selectedDate = DateTime.now();
 
     // Determine branch from pond's zone
     String branchId = '';
@@ -2902,6 +2952,22 @@ class _FarmMapViewState extends State<FarmMapView> {
               width: 540,
               child: SingleChildScrollView(
                 child: Column(mainAxisSize: MainAxisSize.min, children: [
+                  // Ngày phiếu
+                  InkWell(
+                    onTap: () async {
+                      final d = await showDatePicker(context: dCtx, initialDate: selectedDate, firstDate: DateTime(2020), lastDate: DateTime.now());
+                      if (d != null) {
+                        final t = await showTimePicker(context: dCtx, initialTime: TimeOfDay.fromDateTime(selectedDate));
+                        ss(() => selectedDate = DateTime(d.year, d.month, d.day, t?.hour ?? selectedDate.hour, t?.minute ?? selectedDate.minute));
+                      }
+                    },
+                    borderRadius: BorderRadius.circular(12),
+                    child: InputDecorator(
+                      decoration: const InputDecoration(labelText: 'Ngày giờ cho ăn', prefixIcon: Icon(Icons.calendar_today)),
+                      child: Text(DateFormat('dd/MM/yyyy HH:mm').format(selectedDate)),
+                    ),
+                  ),
+                  const SizedBox(height: 12),
                   // Batch summary — per-pond actual fish count
                   Container(
                     padding: const EdgeInsets.all(12),
@@ -3171,7 +3237,7 @@ class _FarmMapViewState extends State<FarmMapView> {
 
       await dp.create('stockissues', {
         'code': issueCode,
-        'date': DateTime.now().toIso8601String(),
+        'date': selectedDate.toIso8601String(),
         'type': 'feeding',
         'pondId': pond.id,
         'fishBatchId': batchId,
@@ -3221,6 +3287,7 @@ class _FarmMapViewState extends State<FarmMapView> {
     final noteC = TextEditingController();
     String? selectedBatchId = batches.length == 1 ? batches.first.id : null;
     String cause = _mortalityCauses.last;
+    DateTime selectedDate = DateTime.now();
 
     final ok = await showDialog<bool>(
       context: context,
@@ -3239,6 +3306,22 @@ class _FarmMapViewState extends State<FarmMapView> {
               width: 480,
               child: SingleChildScrollView(
                 child: Column(mainAxisSize: MainAxisSize.min, children: [
+                  // Ngày ghi nhận
+                  InkWell(
+                    onTap: () async {
+                      final d = await showDatePicker(context: dCtx, initialDate: selectedDate, firstDate: DateTime(2020), lastDate: DateTime.now());
+                      if (d != null) {
+                        final t = await showTimePicker(context: dCtx, initialTime: TimeOfDay.fromDateTime(selectedDate));
+                        ss(() => selectedDate = DateTime(d.year, d.month, d.day, t?.hour ?? selectedDate.hour, t?.minute ?? selectedDate.minute));
+                      }
+                    },
+                    borderRadius: BorderRadius.circular(12),
+                    child: InputDecorator(
+                      decoration: const InputDecoration(labelText: 'Ngày giờ ghi nhận', prefixIcon: Icon(Icons.calendar_today)),
+                      child: Text(DateFormat('dd/MM/yyyy HH:mm').format(selectedDate)),
+                    ),
+                  ),
+                  const SizedBox(height: 12),
                   // Chọn lô cá
                   if (batches.length > 1)
                     DropdownButtonFormField<String>(
@@ -3358,7 +3441,7 @@ class _FarmMapViewState extends State<FarmMapView> {
         'quantity': mortQty,
         'cause': cause,
         'note': noteC.text.isNotEmpty ? '${pond.code}: ${noteC.text}' : 'Hao hụt ${pond.code}',
-        'date': DateTime.now().toIso8601String(),
+        'date': selectedDate.toIso8601String(),
       });
       _showSnack('Đã ghi nhận hao hụt $mortQty con tại ao ${pond.code}');
     }
@@ -3384,6 +3467,7 @@ class _FarmMapViewState extends State<FarmMapView> {
     // Employee list for picker
     final emps = dp.employees;
     String? selectedEmpId = pond.measuredBy.isNotEmpty ? pond.measuredBy : null;
+    DateTime selectedDate = DateTime.now();
 
     // History records for this pond
     final history = dp.sensorReadings
@@ -3465,6 +3549,22 @@ class _FarmMapViewState extends State<FarmMapView> {
                     child: tabIndex == 0
                       ? SingleChildScrollView(
                           child: Column(mainAxisSize: MainAxisSize.min, children: [
+                            // Ngày đo
+                            InkWell(
+                              onTap: () async {
+                                final d = await showDatePicker(context: dCtx, initialDate: selectedDate, firstDate: DateTime(2020), lastDate: DateTime.now());
+                                if (d != null) {
+                                  final t = await showTimePicker(context: dCtx, initialTime: TimeOfDay.fromDateTime(selectedDate));
+                                  setSt(() => selectedDate = DateTime(d.year, d.month, d.day, t?.hour ?? selectedDate.hour, t?.minute ?? selectedDate.minute));
+                                }
+                              },
+                              borderRadius: BorderRadius.circular(12),
+                              child: InputDecorator(
+                                decoration: const InputDecoration(labelText: 'Ngày giờ đo', prefixIcon: Icon(Icons.calendar_today)),
+                                child: Text(DateFormat('dd/MM/yyyy HH:mm').format(selectedDate)),
+                              ),
+                            ),
+                            const SizedBox(height: 14),
                             // Employee picker
                             DropdownButtonFormField<String>(
                               value: selectedEmpId,
@@ -3605,7 +3705,7 @@ class _FarmMapViewState extends State<FarmMapView> {
         'alkalinity': double.tryParse(alkC.text),
         'measuredBy': selectedEmpId ?? '',
         'note': noteC.text.trim(),
-        'timestamp': DateTime.now().toIso8601String(),
+        'timestamp': selectedDate.toIso8601String(),
       });
 
       // Create water_check task record
@@ -3615,7 +3715,7 @@ class _FarmMapViewState extends State<FarmMapView> {
         'type': 'water_check',
         'assignedTo': selectedEmpId ?? '',
         'pondId': pond.id,
-        'dueDate': DateTime.now().toIso8601String(),
+        'dueDate': selectedDate.toIso8601String(),
         'status': 'done',
         'note': 'Người đo: $empName${noteC.text.isNotEmpty ? ' • ${noteC.text}' : ''}',
       });
