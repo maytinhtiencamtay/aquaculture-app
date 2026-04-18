@@ -1340,6 +1340,12 @@ class _FarmMapViewState extends State<FarmMapView> {
                     enabled: activeBatches.isNotEmpty,
                     onTap: () { Navigator.pop(ctx); _showSizeMeasurementDialog(pond, activeBatches); },
                   ),
+                  _ActionButton(
+                    icon: Icons.history_rounded,
+                    label: 'LS cho ăn',
+                    color: const Color(0xFF43A047),
+                    onTap: () { Navigator.pop(ctx); _showFeedingHistoryDialog(pond); },
+                  ),
                 ],
               ),
               const SizedBox(height: 8),
@@ -3140,13 +3146,29 @@ class _FarmMapViewState extends State<FarmMapView> {
                       child: Column(children: [
                         Row(children: [
                           Expanded(
-                            child: DropdownButtonFormField<String>(
+                            child: Autocomplete<String>(
                               key: ValueKey('feed_prod_${idx}_$currentPid'),
-                              initialValue: currentPid,
-                              decoration: const InputDecoration(labelText: 'Sản phẩm', isDense: true, contentPadding: EdgeInsets.symmetric(horizontal: 10, vertical: 8)),
-                              items: availableProducts.map((p) => DropdownMenuItem(value: p.id, child: Text('${p.name} (tồn: ${_smartQty(p.stock)})', overflow: TextOverflow.ellipsis))).toList(),
-                              onChanged: (v) => ss(() {
-                                final p = dp.productById(v!);
+                              initialValue: TextEditingValue(text: currentPid != null ? '${dp.productById(currentPid)?.name ?? ''} (tồn: ${_smartQty(dp.productById(currentPid)?.stock ?? 0)})' : ''),
+                              optionsBuilder: (textEditingValue) {
+                                final query = textEditingValue.text.toLowerCase();
+                                return availableProducts
+                                    .where((p) => query.isEmpty || p.name.toLowerCase().contains(query))
+                                    .map((p) => p.id);
+                              },
+                              displayStringForOption: (id) {
+                                final p = dp.productById(id);
+                                return p != null ? '${p.name} (tồn: ${_smartQty(p.stock)})' : id;
+                              },
+                              fieldViewBuilder: (ctx, textC, focusNode, onFieldSubmitted) {
+                                return TextFormField(
+                                  controller: textC,
+                                  focusNode: focusNode,
+                                  decoration: const InputDecoration(labelText: 'Sản phẩm (gõ để tìm)', isDense: true, contentPadding: EdgeInsets.symmetric(horizontal: 10, vertical: 8), prefixIcon: Icon(Icons.search, size: 18)),
+                                  style: const TextStyle(fontSize: 13),
+                                );
+                              },
+                              onSelected: (v) => ss(() {
+                                final p = dp.productById(v);
                                 item['productId'] = v;
                                 item['productName'] = p?.name ?? '';
                                 item['unitPrice'] = p != null ? (p.costPrice > 0 ? p.costPrice : p.price) : 0;
@@ -3939,6 +3961,132 @@ class _FarmMapViewState extends State<FarmMapView> {
       await Future.wait([dp.reload('fishbatches'), dp.reload('products'), dp.reload('stockissues'), dp.reload('saleorders'), dp.reload('ponds')]);
 
       _showSnack('Xuất bán $sellQty con – ${_currFmt.format(totalAmount)}đ');
+    }
+  }
+
+  // ═══ LỊCH SỬ CHO ĂN THEO AO / LÔ ═══
+  void _showFeedingHistoryDialog(Pond pond) {
+    final dateFmt = DateFormat('dd/MM/yyyy');
+    final timeFmt = DateFormat('HH:mm');
+
+    // Lấy tất cả phiếu xuất kho cho ăn liên quan đến ao này
+    final feedIssues = dp.stockIssues
+        .where((si) => si.type == 'feeding' && si.pondId == pond.id)
+        .toList()
+      ..sort((a, b) => b.date.compareTo(a.date));
+
+    // Lấy feeding logs
+    final feedLogs = dp.feedingLogs
+        .where((l) => l['pondId'] == pond.id)
+        .toList()
+      ..sort((a, b) {
+        final da = DateTime.tryParse(a['date'] as String? ?? '') ?? DateTime(2000);
+        final db = DateTime.tryParse(b['date'] as String? ?? '') ?? DateTime(2000);
+        return db.compareTo(da);
+      });
+
+    // Lấy batch IDs liên quan
+    final activeBatches = dp.batchesForPond(pond.id);
+    final batchMap = <String, String>{};
+    for (final b in activeBatches) {
+      final sp = dp.speciesById(b.speciesId);
+      batchMap[b.id] = b.name.isNotEmpty ? b.name : (sp?.name ?? 'Lô #${b.id.substring(0, 6)}');
+    }
+
+    showDialog(
+      context: context,
+      builder: (dCtx) => AlertDialog(
+        title: Row(children: [
+          const Icon(Icons.history_rounded, color: AppColors.success),
+          const SizedBox(width: 8),
+          Expanded(child: Text('Lịch sử cho ăn – ${pond.code}', overflow: TextOverflow.ellipsis)),
+        ]),
+        content: SizedBox(
+          width: AppSizes.dialogWidth(context, 600),
+          height: MediaQuery.of(context).size.height * 0.7,
+          child: feedIssues.isEmpty && feedLogs.isEmpty
+              ? const Center(child: Column(mainAxisSize: MainAxisSize.min, children: [
+                  Icon(Icons.restaurant_rounded, size: 48, color: AppColors.textHint),
+                  SizedBox(height: 8),
+                  Text('Chưa có lịch sử cho ăn', style: TextStyle(color: AppColors.textHint)),
+                ]))
+              : ListView.builder(
+                  itemCount: feedIssues.length,
+                  itemBuilder: (_, i) {
+                    final si = feedIssues[i];
+                    final batchName = si.fishBatchId.isNotEmpty
+                        ? (si.fishBatchId.contains(',')
+                            ? si.fishBatchId.split(',').map((id) => batchMap[id] ?? id.substring(0, 6)).join(', ')
+                            : batchMap[si.fishBatchId] ?? si.fishBatchId)
+                        : 'Tất cả lô';
+                    final itemsStr = si.items.map((it) => '${it['productName'] ?? 'SP'} × ${it['qty']} ${it['unit'] ?? 'kg'}').join(', ');
+                    final total = si.totalAmount;
+
+                    return Card(
+                      margin: const EdgeInsets.only(bottom: 8),
+                      child: Padding(
+                        padding: const EdgeInsets.all(12),
+                        child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                          Row(children: [
+                            Container(
+                              padding: const EdgeInsets.all(6),
+                              decoration: BoxDecoration(
+                                color: si.status == 'approved' ? AppColors.success.withAlpha(20) : AppColors.warning.withAlpha(20),
+                                borderRadius: BorderRadius.circular(8),
+                              ),
+                              child: Icon(Icons.restaurant_rounded, size: 18, color: si.status == 'approved' ? AppColors.success : AppColors.warning),
+                            ),
+                            const SizedBox(width: 10),
+                            Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                              Text(si.code, style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 13)),
+                              Text(batchName, style: const TextStyle(fontSize: 11, color: AppColors.textSecondary)),
+                            ])),
+                            Column(crossAxisAlignment: CrossAxisAlignment.end, children: [
+                              Text('${dateFmt.format(si.date)} ${timeFmt.format(si.date)}', style: const TextStyle(fontSize: 11, color: AppColors.textHint)),
+                              Text(_statusLabel(si.status), style: TextStyle(fontSize: 10, fontWeight: FontWeight.w600, color: si.status == 'approved' ? AppColors.success : AppColors.warning)),
+                            ]),
+                          ]),
+                          const SizedBox(height: 8),
+                          // Chi tiết sản phẩm
+                          ...si.items.map((it) => Padding(
+                            padding: const EdgeInsets.only(left: 44, bottom: 2),
+                            child: Row(children: [
+                              Expanded(child: Text('${it['productName'] ?? 'SP'}', style: const TextStyle(fontSize: 12))),
+                              Text('${it['qty']} ${it['unit'] ?? 'kg'}', style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w600)),
+                            ]),
+                          )),
+                          if (total > 0)
+                            Padding(
+                              padding: const EdgeInsets.only(left: 44, top: 4),
+                              child: Text('Giá trị: ${_currFmt.format(total.round())}đ', style: const TextStyle(fontSize: 11, color: AppColors.warning, fontWeight: FontWeight.w600)),
+                            ),
+                          // Nhân viên
+                          if (si.issuedTo.isNotEmpty) ...[
+                            Padding(
+                              padding: const EdgeInsets.only(left: 44, top: 2),
+                              child: Text('NV: ${dp.employeeById(si.issuedTo)?.name ?? si.issuedTo}', style: const TextStyle(fontSize: 11, color: AppColors.textSecondary)),
+                            ),
+                          ],
+                        ]),
+                      ),
+                    );
+                  },
+                ),
+        ),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(dCtx), child: const Text('Đóng')),
+        ],
+      ),
+    );
+  }
+
+  String _statusLabel(String status) {
+    switch (status) {
+      case 'approved': return 'Đã duyệt';
+      case 'draft': return 'Chờ duyệt';
+      case 'confirmed': return 'Đã xác nhận';
+      case 'cancelled': return 'Đã huỷ';
+      default: return status;
     }
   }
 

@@ -393,6 +393,7 @@ class _WarehouseViewState extends State<WarehouseView> with SingleTickerProvider
   }
 
   static final _dateFmt = DateFormat('dd/MM/yyyy');
+  static final _dtFmt = DateFormat('dd/MM/yyyy HH:mm');
 
   void _showSnack(String msg, {bool isError = false}) {
     if (!mounted) return;
@@ -1320,7 +1321,7 @@ class _WarehouseViewState extends State<WarehouseView> with SingleTickerProvider
                       onTap: () => _showDocSheet(
                         title: si.code.isNotEmpty ? si.code : 'XK #${si.id.substring(0, 6)}',
                         statusLabel: si.statusLabel, statusColor: _statusColor(si.status),
-                        info: [('Loại', si.typeLabel), if (pond != null) ('Ao', pond.code), ('Ngày', _dateFmt.format(si.date)), if (si.note.isNotEmpty) ('Ghi chú', si.note)],
+                        info: [('Loại', si.typeLabel), if (pond != null) ('Ao', pond.code), ('Ngày', _dtFmt.format(si.date)), if (si.note.isNotEmpty) ('Ghi chú', si.note)],
                         items: si.items, total: si.totalAmount, totalColor: AppColors.warning,
                       ),
                       child: Card(
@@ -1386,7 +1387,7 @@ class _WarehouseViewState extends State<WarehouseView> with SingleTickerProvider
                               padding: const EdgeInsets.only(left: 46, top: 4),
                               child: Row(
                                 children: [
-                                  Text(_dateFmt.format(si.date), style: const TextStyle(fontSize: 12, color: AppColors.textHint)),
+                                  Text(_dtFmt.format(si.date), style: const TextStyle(fontSize: 12, color: AppColors.textHint)),
                                   const Spacer(),
                                   Text('${_currFmt.format(si.totalAmount)}đ', style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 14, color: AppColors.warning)),
                                 ],
@@ -2398,14 +2399,30 @@ class _WarehouseViewState extends State<WarehouseView> with SingleTickerProvider
                       child: Column(children: [
                         Row(children: [
                           Expanded(
-                            child: DropdownButtonFormField<String>(
+                            child: Autocomplete<String>(
                               key: ValueKey('issue_prod_${idx}_$currentPid'),
-                              initialValue: currentPid,
-                              decoration: const InputDecoration(labelText: 'Sản phẩm', isDense: true, contentPadding: EdgeInsets.symmetric(horizontal: 10, vertical: 8)),
-                              items: availableProducts.map((p) => DropdownMenuItem(value: p.id, child: Text('${p.name} (tồn: ${_smartQty(p.stock)})', overflow: TextOverflow.ellipsis))).toList(),
-                              onChanged: (v) => ss(() {
+                              initialValue: TextEditingValue(text: currentPid != null ? '${dp.productById(currentPid)?.name ?? ''} (tồn: ${_smartQty(dp.productById(currentPid)?.stock ?? 0)})' : ''),
+                              optionsBuilder: (textEditingValue) {
+                                final query = textEditingValue.text.toLowerCase();
+                                return availableProducts
+                                    .where((p) => query.isEmpty || p.name.toLowerCase().contains(query))
+                                    .map((p) => p.id);
+                              },
+                              displayStringForOption: (id) {
+                                final p = dp.productById(id);
+                                return p != null ? '${p.name} (tồn: ${_smartQty(p.stock)})' : id;
+                              },
+                              fieldViewBuilder: (ctx, textC, focusNode, onFieldSubmitted) {
+                                return TextFormField(
+                                  controller: textC,
+                                  focusNode: focusNode,
+                                  decoration: const InputDecoration(labelText: 'Sản phẩm (gõ để tìm)', isDense: true, contentPadding: EdgeInsets.symmetric(horizontal: 10, vertical: 8), prefixIcon: Icon(Icons.search, size: 18)),
+                                  style: const TextStyle(fontSize: 13),
+                                );
+                              },
+                              onSelected: (v) => ss(() {
                                 // Cập nhật product id, name, giá vốn, đơn vị
-                                final p = dp.productById(v!);
+                                final p = dp.productById(v);
                                 item['productId'] = v;
                                 item['productName'] = p?.name ?? '';
                                 item['unitPrice'] = p?.costPrice ?? 0;
