@@ -132,7 +132,9 @@ class DashboardView extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final wide = MediaQuery.of(context).size.width >= 860;
+    final screenW = MediaQuery.of(context).size.width;
+    final wide = screenW >= 860;
+    final tablet = screenW >= 600 && screenW < 860;
     final revenue30 = _totalRevenue30d();
     final expense30 = _totalExpense30d();
     final profit30 = revenue30 - expense30;
@@ -171,7 +173,7 @@ class DashboardView extends StatelessWidget {
         children: [
           // ── Row 1: KPI Grid (8 cards) ──
           LayoutBuilder(builder: (_, constraints) {
-            final cols = wide ? 4 : 2;
+            final cols = wide ? 4 : (tablet ? 3 : 2);
             const spacing = 12.0;
             final w = (constraints.maxWidth - spacing * (cols - 1)) / cols;
             final cards = <Widget>[
@@ -267,7 +269,7 @@ class DashboardView extends StatelessWidget {
           if (totalSeedCost > 0) const SizedBox(height: 16),
 
           // ── Row 2: Revenue/Expense Line Chart + Pond Pie ──
-          if (wide)
+          if (wide || tablet)
             Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
               Expanded(flex: 3, child: _buildRevenueChart()),
               const SizedBox(width: 16),
@@ -281,7 +283,7 @@ class DashboardView extends StatelessWidget {
           const SizedBox(height: 16),
 
           // ── Row 3: Species Bar + Task Donut ──
-          if (wide)
+          if (wide || tablet)
             Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
               Expanded(child: _buildSpeciesBarChart()),
               const SizedBox(width: 16),
@@ -295,7 +297,7 @@ class DashboardView extends StatelessWidget {
           const SizedBox(height: 16),
 
           // ── Row 4: Inventory bar + Batch mortality/survival ──
-          if (wide)
+          if (wide || tablet)
             Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
               Expanded(child: _buildInventoryChart()),
               const SizedBox(width: 16),
@@ -309,7 +311,7 @@ class DashboardView extends StatelessWidget {
           const SizedBox(height: 16),
 
           // ── Row 5: Quick actions + Recent sales + Alerts ──
-          if (wide)
+          if (wide || tablet)
             Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
               Expanded(child: _buildQuickActions(context)),
               const SizedBox(width: 16),

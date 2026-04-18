@@ -1447,7 +1447,8 @@ saleRouter.post('/', (req, res) => {
   if (!customer) return res.status(400).json({ message: 'Khách hàng không tồn tại' });
   // Validate items have positive qty
   for (const it of items) {
-    if (!it.qty || it.qty <= 0) return res.status(400).json({ message: 'Số lượng sản phẩm phải > 0' });
+    const q = it.qty || it.quantity || 0;
+    if (!q || q <= 0) return res.status(400).json({ message: 'Số lượng sản phẩm phải > 0' });
   }
   const item = { _id: genId(), ...req.body, storeId: req.user.storeId, createdAt: new Date().toISOString() };
   db.saleorders.push(item);

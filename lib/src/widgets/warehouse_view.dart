@@ -266,7 +266,7 @@ class _WarehouseViewState extends State<WarehouseView> with SingleTickerProvider
           Text('Nhập ${parsed.length} sản phẩm'),
         ]),
         content: SizedBox(
-          width: 600,
+          width: AppSizes.dialogWidth(context, 600),
           height: 400,
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
@@ -856,7 +856,7 @@ class _WarehouseViewState extends State<WarehouseView> with SingleTickerProvider
             _StatusBadge(p.categoryLabel, AppColors.secondary),
           ]),
           content: SizedBox(
-            width: 600,
+            width: AppSizes.dialogWidth(context, 600),
             height: 500,
             child: Column(children: [
               // Tab bar
@@ -957,6 +957,12 @@ class _WarehouseViewState extends State<WarehouseView> with SingleTickerProvider
                       ]),
                       const SizedBox(height: 12),
                       // Header
+                      Expanded(
+                        child: SingleChildScrollView(
+                          scrollDirection: Axis.horizontal,
+                          child: SizedBox(
+                            width: 420,
+                            child: Column(children: [
                       Container(
                         padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
                         decoration: BoxDecoration(color: AppColors.surfaceVariant, borderRadius: const BorderRadius.vertical(top: Radius.circular(8))),
@@ -996,6 +1002,9 @@ class _WarehouseViewState extends State<WarehouseView> with SingleTickerProvider
                           },
                         ),
                       ),
+                    ]),
+                    ),
+                  )),
                     ]),
               ),
             ]),
@@ -1587,7 +1596,7 @@ class _WarehouseViewState extends State<WarehouseView> with SingleTickerProvider
             Text(isEdit ? 'Sửa hàng hóa' : 'Thêm hàng hóa'),
           ]),
           content: SizedBox(
-            width: 550,
+            width: AppSizes.dialogWidth(context, 550),
             child: SingleChildScrollView(
               child: Column(mainAxisSize: MainAxisSize.min, children: [
               // ── Thông tin cơ bản ──
@@ -1818,7 +1827,7 @@ class _WarehouseViewState extends State<WarehouseView> with SingleTickerProvider
               Text(isEdit ? 'Sửa phiếu đặt hàng' : 'Tạo phiếu đặt hàng'),
             ]),
             content: SizedBox(
-              width: 500,
+              width: AppSizes.dialogWidth(context, 500),
               child: SingleChildScrollView(
                 child: Column(mainAxisSize: MainAxisSize.min, children: [
                   TextField(controller: codeC, decoration: const InputDecoration(labelText: 'Mã phiếu', prefixIcon: Icon(Icons.tag))),
@@ -2014,7 +2023,7 @@ class _WarehouseViewState extends State<WarehouseView> with SingleTickerProvider
               Text(isEdit ? 'Sửa phiếu nhập kho' : 'Tạo phiếu nhập kho'),
             ]),
             content: SizedBox(
-              width: 500,
+              width: AppSizes.dialogWidth(context, 500),
               child: SingleChildScrollView(
                 child: Column(mainAxisSize: MainAxisSize.min, children: [
                   TextField(controller: codeC, decoration: const InputDecoration(labelText: 'Mã phiếu', prefixIcon: Icon(Icons.tag))),
@@ -2241,7 +2250,7 @@ class _WarehouseViewState extends State<WarehouseView> with SingleTickerProvider
               Text(isEdit ? 'Sửa phiếu xuất kho' : 'Tạo phiếu xuất kho'),
             ]),
             content: SizedBox(
-              width: 520,
+              width: AppSizes.dialogWidth(context, 520),
               child: SingleChildScrollView(
                 child: Column(mainAxisSize: MainAxisSize.min, children: [
                   _dateField(selectedDate, () async {
@@ -2537,7 +2546,7 @@ class _WarehouseViewState extends State<WarehouseView> with SingleTickerProvider
             Text(isEdit ? 'Sửa phiếu kiểm kê' : 'Tạo phiếu kiểm kê'),
           ]),
           content: SizedBox(
-            width: 560,
+            width: AppSizes.dialogWidth(context, 560),
             child: SingleChildScrollView(
               child: Column(mainAxisSize: MainAxisSize.min, children: [
                 TextField(controller: codeC, decoration: const InputDecoration(labelText: 'Mã phiếu', prefixIcon: Icon(Icons.tag))),
@@ -2686,7 +2695,7 @@ class _WarehouseViewState extends State<WarehouseView> with SingleTickerProvider
           Text(isEdit ? 'Sửa nhà cung cấp' : 'Thêm nhà cung cấp'),
         ]),
         content: SizedBox(
-          width: 500,
+          width: AppSizes.dialogWidth(context, 500),
           child: SingleChildScrollView(
             child: Column(mainAxisSize: MainAxisSize.min, children: [
             TextField(controller: nameC, decoration: const InputDecoration(labelText: 'Tên NCC', prefixIcon: Icon(Icons.business))),
@@ -2795,7 +2804,7 @@ class _WarehouseViewState extends State<WarehouseView> with SingleTickerProvider
           return AlertDialog(
             title: const Row(children: [Icon(Icons.check_circle, color: AppColors.success), SizedBox(width: 8), Text('Duyệt nhập kho')]),
             content: SizedBox(
-              width: 420,
+              width: AppSizes.dialogWidth(context, 420),
               child: Column(mainAxisSize: MainAxisSize.min, children: [
                 // ── Thông tin phiếu ──
                 Container(
@@ -3124,7 +3133,7 @@ class _WarehouseViewState extends State<WarehouseView> with SingleTickerProvider
       builder: (ctx) => Dialog(
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
         child: ConstrainedBox(
-          constraints: const BoxConstraints(maxWidth: 520, maxHeight: 600),
+          constraints: BoxConstraints(maxWidth: AppSizes.dialogWidth(context, 520), maxHeight: AppSizes.dialogMaxHeightR(context)),
           child: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
@@ -3209,7 +3218,7 @@ class _WarehouseViewState extends State<WarehouseView> with SingleTickerProvider
       builder: (ctx) => Dialog(
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
         child: ConstrainedBox(
-          constraints: const BoxConstraints(maxWidth: 520, maxHeight: 600),
+          constraints: BoxConstraints(maxWidth: AppSizes.dialogWidth(context, 520), maxHeight: AppSizes.dialogMaxHeightR(context)),
           child: Column(
             mainAxisSize: MainAxisSize.min,
             children: [

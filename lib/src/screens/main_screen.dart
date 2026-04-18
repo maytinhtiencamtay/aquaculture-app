@@ -1,4 +1,4 @@
-﻿import 'package:flutter/material.dart';
+import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
 import 'package:intl/intl.dart';
@@ -894,7 +894,7 @@ class _MainScreenState extends State<MainScreen> with TickerProviderStateMixin {
         builder: (dCtx, ss) => AlertDialog(
           title: const Text('Tìm kiếm toàn hệ thống'),
           content: ConstrainedBox(
-            constraints: BoxConstraints(maxWidth: AppSizes.dialogMaxWidth, maxHeight: AppSizes.dialogMaxHeight),
+            constraints: BoxConstraints(maxWidth: AppSizes.dialogWidth(context), maxHeight: AppSizes.dialogMaxHeightR(context)),
             child: Column(
               children: [
                 TextField(
@@ -1233,7 +1233,7 @@ class _MainScreenState extends State<MainScreen> with TickerProviderStateMixin {
         builder: (dCtx, ss) => AlertDialog(
           title: const Text('Thu hoạch'),
           content: SizedBox(
-            width: AppSizes.dialogMaxWidth,
+            width: AppSizes.dialogWidth(context),
             child: SingleChildScrollView(
             child: Column(mainAxisSize: MainAxisSize.min, children: [
               if (batch == null)
@@ -1363,7 +1363,7 @@ class _MainScreenState extends State<MainScreen> with TickerProviderStateMixin {
               const Text('Tạo phiếu cho ăn'),
             ]),
             content: SizedBox(
-              width: 540,
+              width: AppSizes.dialogWidth(context, 540),
               child: SingleChildScrollView(
               child: Column(mainAxisSize: MainAxisSize.min, children: [
                 DropdownButtonFormField<String>(
@@ -1728,7 +1728,7 @@ class _MainScreenState extends State<MainScreen> with TickerProviderStateMixin {
           return AlertDialog(
             title: const Text('Ghi nhận hao hụt / bệnh'),
             content: SizedBox(
-              width: AppSizes.dialogMaxWidth,
+              width: AppSizes.dialogWidth(context),
               child: SingleChildScrollView(
               child: Column(mainAxisSize: MainAxisSize.min, children: [
                 DropdownButtonFormField<String>(
@@ -1847,7 +1847,7 @@ class _MainScreenState extends State<MainScreen> with TickerProviderStateMixin {
       builder: (dCtx) => AlertDialog(
         title: Text(isEdit ? 'Sửa chi nhánh' : 'Thêm chi nhánh'),
         content: SizedBox(
-          width: AppSizes.dialogMaxWidth,
+          width: AppSizes.dialogWidth(context),
           child: SingleChildScrollView(
           child: Column(mainAxisSize: MainAxisSize.min, children: [
             TextField(controller: nameC, decoration: const InputDecoration(labelText: 'Tên chi nhánh')),
@@ -1891,7 +1891,7 @@ class _MainScreenState extends State<MainScreen> with TickerProviderStateMixin {
         builder: (dCtx, ss) => AlertDialog(
           title: Text(isEdit ? 'Sửa ao nuôi' : 'Thêm ao nuôi'),
           content: SizedBox(
-            width: AppSizes.dialogMaxWidth,
+            width: AppSizes.dialogWidth(context),
             child: SingleChildScrollView(
               child: Column(mainAxisSize: MainAxisSize.min, children: [
                 TextField(controller: codeC, decoration: const InputDecoration(labelText: 'Mã ao', prefixIcon: Icon(Icons.label))),
@@ -1971,7 +1971,7 @@ class _MainScreenState extends State<MainScreen> with TickerProviderStateMixin {
         builder: (dCtx, ss) => AlertDialog(
           title: Text(isEdit ? 'Sửa phân khu' : 'Thêm phân khu'),
           content: SizedBox(
-            width: AppSizes.dialogMaxWidth,
+            width: AppSizes.dialogWidth(context),
             child: SingleChildScrollView(
             child: Column(mainAxisSize: MainAxisSize.min, children: [
               TextField(controller: nameC, decoration: const InputDecoration(labelText: 'Tên phân khu')),
@@ -2035,7 +2035,7 @@ class _MainScreenState extends State<MainScreen> with TickerProviderStateMixin {
       builder: (dCtx) => AlertDialog(
         title: Text(isEdit ? 'Sửa loài cá' : 'Thêm loài cá'),
         content: SizedBox(
-          width: AppSizes.dialogMaxWidth,
+          width: AppSizes.dialogWidth(context),
           child: SingleChildScrollView(
           child: StatefulBuilder(
             builder: (ctx, setDialogState) => Column(mainAxisSize: MainAxisSize.min, children: [
@@ -2224,7 +2224,7 @@ class _MainScreenState extends State<MainScreen> with TickerProviderStateMixin {
           return AlertDialog(
             title: Text(isEdit ? 'Sửa lô cá' : 'Thêm lô cá'),
             content: ConstrainedBox(
-              constraints: const BoxConstraints(maxWidth: AppSizes.dialogMaxWidth, maxHeight: AppSizes.dialogMaxHeight),
+              constraints: BoxConstraints(maxWidth: AppSizes.dialogWidth(context), maxHeight: AppSizes.dialogMaxHeightR(context)),
               child: SingleChildScrollView(
                 child: Column(mainAxisSize: MainAxisSize.min, children: [
                   // Warning when missing species
@@ -2496,7 +2496,7 @@ class _MainScreenState extends State<MainScreen> with TickerProviderStateMixin {
         builder: (dCtx, ss) => AlertDialog(
           title: Text(isEdit ? 'Sửa nhân viên' : 'Thêm nhân viên'),
           content: SizedBox(
-            width: AppSizes.dialogMaxWidth,
+            width: AppSizes.dialogWidth(context),
             child: SingleChildScrollView(
             child: Column(mainAxisSize: MainAxisSize.min, children: [
               TextField(controller: nameC, decoration: const InputDecoration(labelText: 'Họ tên *', prefixIcon: Icon(Icons.person))),
@@ -3015,7 +3015,7 @@ class _MainScreenState extends State<MainScreen> with TickerProviderStateMixin {
                           builder: (ctx2) => AlertDialog(
                             title: const Text('Đổi mật khẩu'),
                             content: SizedBox(
-                              width: 400,
+                              width: AppSizes.dialogWidth(context, 400),
                               child: Form(
                               key: fk,
                               child: Column(mainAxisSize: MainAxisSize.min, children: [
@@ -3152,7 +3152,7 @@ class _MainScreenState extends State<MainScreen> with TickerProviderStateMixin {
         builder: (dCtx, ss) => AlertDialog(
           title: Text(isEdit ? 'Sửa công việc' : 'Thêm công việc'),
           content: SizedBox(
-            width: AppSizes.dialogMaxWidth,
+            width: AppSizes.dialogWidth(context),
             child: SingleChildScrollView(
             child: Column(mainAxisSize: MainAxisSize.min, children: [
               TextField(controller: titleC, decoration: const InputDecoration(labelText: 'Tiêu đề')),
@@ -3237,7 +3237,7 @@ class _MainScreenState extends State<MainScreen> with TickerProviderStateMixin {
             Text(isEdit ? 'Sửa khách hàng' : 'Thêm khách hàng'),
           ]),
           content: SizedBox(
-            width: AppSizes.dialogMaxWidth,
+            width: AppSizes.dialogWidth(context),
             child: SingleChildScrollView(
             child: Column(mainAxisSize: MainAxisSize.min, children: [
               TextField(controller: nameC, decoration: const InputDecoration(labelText: 'Tên khách hàng *', prefixIcon: Icon(Icons.person))),
@@ -3340,7 +3340,7 @@ class _MainScreenState extends State<MainScreen> with TickerProviderStateMixin {
               Text(isEdit ? 'Sửa đơn bán' : 'Thêm đơn bán'),
             ]),
             content: ConstrainedBox(
-              constraints: const BoxConstraints(maxWidth: AppSizes.dialogMaxWidth, maxHeight: AppSizes.dialogMaxHeight),
+              constraints: BoxConstraints(maxWidth: AppSizes.dialogWidth(context), maxHeight: AppSizes.dialogMaxHeightR(context)),
               child: SingleChildScrollView(
                 child: Column(mainAxisSize: MainAxisSize.min, children: [
                   // Customer
@@ -3529,12 +3529,20 @@ class _MainScreenState extends State<MainScreen> with TickerProviderStateMixin {
         _showSnack('Đơn hàng phải có ít nhất 1 sản phẩm');
         return;
       }
+      // Map items to use 'qty' field name expected by backend
+      final mappedItems = items.map((item) => {
+        'productId': item['productId'],
+        'productName': item['productName'],
+        'qty': (item['quantity'] as num?)?.toDouble() ?? 0,
+        'unitPrice': (item['price'] as num?)?.toDouble() ?? 0,
+        'unit': item['unit'] ?? 'kg',
+      }).toList();
       final data = {
         'customerId': customerId,
         'date': existing?.date.toIso8601String() ?? DateTime.now().toIso8601String(),
         'pondId': pondId ?? '',
         'fishBatchId': existing?.fishBatchId ?? '',
-        'items': items,
+        'items': mappedItems,
         'totalAmount': calcTotal(),
         'status': status,
       };
@@ -3573,7 +3581,7 @@ class _MainScreenState extends State<MainScreen> with TickerProviderStateMixin {
             Text(isEdit ? 'Sửa sản phẩm' : 'Thêm sản phẩm'),
           ]),
           content: SizedBox(
-            width: AppSizes.dialogMaxWidth,
+            width: AppSizes.dialogWidth(context),
             child: SingleChildScrollView(
             child: Column(mainAxisSize: MainAxisSize.min, children: [
               TextField(controller: skuC, decoration: const InputDecoration(labelText: 'Mã SP (SKU)', prefixIcon: Icon(Icons.qr_code))),

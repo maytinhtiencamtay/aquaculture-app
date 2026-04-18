@@ -155,6 +155,20 @@ class AppSizes {
   static const double iconSm = 18;
   static const double iconMd = 20;
   static const double iconLg = 24;
+
+  /// Responsive dialog content width: min(desired, screenWidth - 32)
+  static double dialogWidth(BuildContext context, [double desired = 540]) {
+    final sw = MediaQuery.of(context).size.width;
+    return sw < desired + 64 ? sw - 32 : desired;
+  }
+
+  /// Responsive dialog max height: screenHeight * 0.85
+  static double dialogMaxHeightR(BuildContext context) =>
+      MediaQuery.of(context).size.height * 0.85;
+
+  /// Whether current screen is mobile-narrow (<600px)
+  static bool isMobile(BuildContext context) =>
+      MediaQuery.of(context).size.width < 600;
 }
 
 class AppTheme {

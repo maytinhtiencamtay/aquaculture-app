@@ -618,7 +618,7 @@ class _PaymentVoucherViewState extends State<PaymentVoucherView> with SingleTick
             ],
           ),
           content: SizedBox(
-            width: 480,
+            width: AppSizes.dialogWidth(context, 480),
             child: SingleChildScrollView(
               child: Column(
                 mainAxisSize: MainAxisSize.min,

@@ -1676,7 +1676,7 @@ class _FarmMapViewState extends State<FarmMapView> {
         insetPadding: const EdgeInsets.all(16),
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
         child: ConstrainedBox(
-          constraints: BoxConstraints(maxWidth: 520, maxHeight: MediaQuery.of(ctx).size.height * 0.85),
+          constraints: BoxConstraints(maxWidth: AppSizes.dialogWidth(context, 520), maxHeight: AppSizes.dialogMaxHeightR(context)),
           child: Column(children: [
             // Header
             Container(
@@ -1742,7 +1742,7 @@ class _FarmMapViewState extends State<FarmMapView> {
         builder: (ctx, setSt) => AlertDialog(
           title: const Text('Ghi nhận bệnh'),
           content: SizedBox(
-            width: 400,
+            width: AppSizes.dialogWidth(context, 400),
             child: Column(mainAxisSize: MainAxisSize.min, children: [
               TextField(controller: nameC, decoration: const InputDecoration(labelText: 'Tên bệnh *', prefixIcon: Icon(Icons.coronavirus))),
               const SizedBox(height: 10),
@@ -1829,7 +1829,7 @@ class _FarmMapViewState extends State<FarmMapView> {
           return AlertDialog(
             title: const Text('Thêm điều trị'),
             content: SizedBox(
-              width: 480,
+              width: AppSizes.dialogWidth(context, 480),
               child: SingleChildScrollView(child: Column(mainAxisSize: MainAxisSize.min, children: [
                 if (pondDiseases.isNotEmpty)
                   DropdownButtonFormField<String>(
@@ -2079,7 +2079,7 @@ class _FarmMapViewState extends State<FarmMapView> {
         builder: (ctx, setSt) => AlertDialog(
           title: const Text('Ghi nhận thay nước'),
           content: SizedBox(
-            width: 380,
+            width: AppSizes.dialogWidth(context, 380),
             child: Column(mainAxisSize: MainAxisSize.min, children: [
               InkWell(
                 onTap: () async {
@@ -2164,7 +2164,7 @@ class _FarmMapViewState extends State<FarmMapView> {
         builder: (ctx, setSt) => AlertDialog(
           title: const Text('Ghi nhật ký'),
           content: SizedBox(
-            width: 400,
+            width: AppSizes.dialogWidth(context, 400),
             child: SingleChildScrollView(child: Column(mainAxisSize: MainAxisSize.min, children: [
               InkWell(
                 onTap: () async {
@@ -2265,7 +2265,7 @@ class _FarmMapViewState extends State<FarmMapView> {
               ],
             ),
             content: SizedBox(
-              width: 500,
+              width: AppSizes.dialogWidth(context, 500),
               child: SingleChildScrollView(
                 child: Column(mainAxisSize: MainAxisSize.min, children: [
                   DropdownButtonFormField<String>(
@@ -2404,7 +2404,7 @@ class _FarmMapViewState extends State<FarmMapView> {
               Expanded(child: Text('Rút cá khỏi ${pond.code}')),
             ]),
             content: SizedBox(
-              width: 500,
+              width: AppSizes.dialogWidth(context, 500),
               child: SingleChildScrollView(
                 child: Column(mainAxisSize: MainAxisSize.min, children: [
                   // Chọn lô cá
@@ -2593,7 +2593,7 @@ class _FarmMapViewState extends State<FarmMapView> {
             ],
           ),
           content: SizedBox(
-            width: 520,
+            width: AppSizes.dialogWidth(context, 520),
             child: SingleChildScrollView(
               child: Column(mainAxisSize: MainAxisSize.min, children: [
                 DropdownButtonFormField<String>(
@@ -2949,7 +2949,7 @@ class _FarmMapViewState extends State<FarmMapView> {
               Text('Tạo phiếu cho ăn – ${pond.code}'),
             ]),
             content: SizedBox(
-              width: 540,
+              width: AppSizes.dialogWidth(context, 540),
               child: SingleChildScrollView(
                 child: Column(mainAxisSize: MainAxisSize.min, children: [
                   // Ngày phiếu
@@ -3303,7 +3303,7 @@ class _FarmMapViewState extends State<FarmMapView> {
               Text('Ghi nhận hao hụt – ${pond.code}'),
             ]),
             content: SizedBox(
-              width: 480,
+              width: AppSizes.dialogWidth(context, 480),
               child: SingleChildScrollView(
                 child: Column(mainAxisSize: MainAxisSize.min, children: [
                   // Ngày ghi nhận
@@ -3504,7 +3504,7 @@ class _FarmMapViewState extends State<FarmMapView> {
               ],
             ),
             content: SizedBox(
-              width: 600,
+              width: AppSizes.dialogWidth(context, 600),
               height: 500,
               child: Column(
                 children: [
@@ -3798,19 +3798,39 @@ class _FarmMapViewState extends State<FarmMapView> {
     final priceC = TextEditingController();
     final noteC = TextEditingController();
 
+    // Helper: lấy size info cho batch đang chọn
+    String _sizeInfo(FishBatch b) {
+      final w = b.currentWeight > 0 ? b.currentWeight : b.initialWeight; // gram
+      final s = b.currentSize > 0 ? b.currentSize : b.initialSize;       // cm
+      if (w <= 0 && s <= 0) return 'Chưa có dữ liệu size';
+      final parts = <String>[];
+      if (w > 0) parts.add('${w.toStringAsFixed(0)}g');
+      if (s > 0) parts.add('${s.toStringAsFixed(1)}cm');
+      return parts.join(' – ');
+    }
+
+    // Số ngày nuôi trong ao
+    int _pondDays(FishBatch b) {
+      return DateTime.now().difference(b.stockingDate).inDays;
+    }
+
     final ok = await showDialog<bool>(
       context: context,
       builder: (dCtx) => StatefulBuilder(
-        builder: (dCtx, ss) => AlertDialog(
+        builder: (dCtx, ss) {
+          final batch = selectedBatch;
+          final weightG = batch != null ? (batch.currentWeight > 0 ? batch.currentWeight : batch.initialWeight) : 0.0;
+          final qtyInPond = batch?.quantityInPond(pond.id) ?? 0;
+          return AlertDialog(
           title: Row(
             children: [
               const Icon(Icons.shopping_bag_rounded, color: AppColors.secondary),
               const SizedBox(width: 8),
-              Text('Xuất bán từ ${pond.code}'),
+              Expanded(child: Text('Xuất bán từ ${pond.code}', overflow: TextOverflow.ellipsis)),
             ],
           ),
           content: SizedBox(
-            width: 500,
+            width: AppSizes.dialogWidth(context, 500),
             child: SingleChildScrollView(
               child: Column(mainAxisSize: MainAxisSize.min, children: [
               DropdownButtonFormField<String>(
@@ -3823,18 +3843,47 @@ class _FarmMapViewState extends State<FarmMapView> {
                 }).toList(),
                 onChanged: (v) => ss(() => selectedBatch = batches.firstWhere((b) => b.id == v)),
               ),
+              // ── Thông tin size cá & ngày nuôi ──
+              if (batch != null) ...[
+                const SizedBox(height: 8),
+                Container(
+                  padding: const EdgeInsets.all(10),
+                  decoration: BoxDecoration(
+                    color: AppColors.info.withAlpha(15),
+                    borderRadius: BorderRadius.circular(8),
+                    border: Border.all(color: AppColors.info.withAlpha(40)),
+                  ),
+                  child: Column(children: [
+                    Row(children: [
+                      const Icon(Icons.straighten, size: 15, color: AppColors.info),
+                      const SizedBox(width: 6),
+                      Text('Size: ${_sizeInfo(batch)}', style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w600)),
+                      const Spacer(),
+                      Text('${weightG > 0 ? (weightG / 1000).toStringAsFixed(2) : '?'} kg/con', style: const TextStyle(fontSize: 11, color: AppColors.textSecondary)),
+                    ]),
+                    const SizedBox(height: 4),
+                    Row(children: [
+                      const Icon(Icons.calendar_today, size: 15, color: AppColors.info),
+                      const SizedBox(width: 6),
+                      Text('Ngày nuôi: ${_pondDays(batch)} ngày', style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w600)),
+                      const Spacer(),
+                      Text('Thả: ${DateFormat('dd/MM/yyyy').format(batch.stockingDate)}', style: const TextStyle(fontSize: 11, color: AppColors.textSecondary)),
+                    ]),
+                  ]),
+                ),
+              ],
               const SizedBox(height: 12),
               TextField(
                 controller: qtyC,
                 decoration: InputDecoration(
                   labelText: 'Số lượng bán (con)',
                   prefixIcon: const Icon(Icons.format_list_numbered),
-                  helperText: 'Tối đa: ${selectedBatch?.quantityInPond(pond.id) ?? 0} con trong ao',
+                  helperText: 'Tối đa: ${_currFmt.format(qtyInPond)} con trong ao',
                 ),
                 keyboardType: TextInputType.number,
               ),
               const SizedBox(height: 12),
-              TextField(controller: priceC, decoration: const InputDecoration(labelText: 'Đơn giá (VNĐ/kg)', prefixIcon: Icon(Icons.attach_money)), keyboardType: TextInputType.number),
+              TextField(controller: priceC, decoration: const InputDecoration(labelText: 'Đơn giá (VNĐ/con)', prefixIcon: Icon(Icons.attach_money)), keyboardType: TextInputType.number),
               const SizedBox(height: 12),
               if (dp.customers.isNotEmpty)
                 DropdownButtonFormField<String>(
@@ -3856,7 +3905,8 @@ class _FarmMapViewState extends State<FarmMapView> {
               label: const Text('Xuất bán'),
             ),
           ],
-        ),
+        );
+        },
       ),
     );
 
@@ -3870,8 +3920,8 @@ class _FarmMapViewState extends State<FarmMapView> {
       }
 
       final unitPrice = double.tryParse(priceC.text) ?? 0;
-      final weightPerFishKg = (batch.currentWeight > 0 ? batch.currentWeight : batch.initialWeight) / 1000;
-      final totalAmount = sellQty * weightPerFishKg * unitPrice;
+      // Tính theo con: totalAmount = số lượng × đơn giá/con
+      final totalAmount = sellQty * unitPrice;
 
       // Create sale order (backend handles fishBatch deduction + stock issue creation via _onSaleCompleted)
       await dp.create('saleorders', {
@@ -3879,9 +3929,10 @@ class _FarmMapViewState extends State<FarmMapView> {
         'date': DateTime.now().toIso8601String(),
         'pondId': pond.id,
         'fishBatchId': batch.id,
-        'items': [{'speciesId': batch.speciesId, 'quantity': sellQty, 'unitPrice': unitPrice}],
+        'items': [{'speciesId': batch.speciesId, 'qty': sellQty, 'unitPrice': unitPrice}],
         'totalAmount': totalAmount,
         'status': 'completed',
+        'note': noteC.text.trim(),
       });
 
       // Reload data to get backend-updated fishBatch and products
@@ -3934,7 +3985,7 @@ class _FarmMapViewState extends State<FarmMapView> {
               ],
             ),
             content: SizedBox(
-              width: 520,
+              width: AppSizes.dialogWidth(context, 520),
               child: SingleChildScrollView(
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
@@ -4110,7 +4161,7 @@ class _FarmMapViewState extends State<FarmMapView> {
               ],
             ),
             content: SizedBox(
-              width: 480,
+              width: AppSizes.dialogWidth(context, 480),
               child: SingleChildScrollView(
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
@@ -4355,7 +4406,7 @@ class _FarmMapViewState extends State<FarmMapView> {
               Text('Đo kích thước – ${pond.code}'),
             ]),
             content: SizedBox(
-              width: 480,
+              width: AppSizes.dialogWidth(context, 480),
               child: SingleChildScrollView(
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,

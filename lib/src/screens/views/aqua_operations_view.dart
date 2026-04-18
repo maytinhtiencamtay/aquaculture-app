@@ -321,7 +321,7 @@ class _AquaOperationsViewState extends State<AquaOperationsView> with TickerProv
         builder: (ctx, setSt) => AlertDialog(
           title: Text(isEdit ? 'Sửa bệnh' : 'Ghi nhận bệnh'),
           content: SizedBox(
-            width: 450,
+            width: AppSizes.dialogWidth(context, 450),
             child: SingleChildScrollView(child: Column(mainAxisSize: MainAxisSize.min, children: [
               TextField(controller: nameC, decoration: const InputDecoration(labelText: 'Tên bệnh *', prefixIcon: Icon(Icons.coronavirus))),
               const SizedBox(height: 10),
@@ -525,7 +525,7 @@ class _AquaOperationsViewState extends State<AquaOperationsView> with TickerProv
         builder: (ctx, setSt) => AlertDialog(
           title: Text(isEdit ? 'Sửa phác đồ' : 'Thêm phác đồ điều trị'),
           content: SizedBox(
-            width: 480,
+            width: AppSizes.dialogWidth(context, 480),
             child: SingleChildScrollView(child: Column(mainAxisSize: MainAxisSize.min, children: [
               // Ngày bắt đầu
               InkWell(
@@ -764,7 +764,7 @@ class _AquaOperationsViewState extends State<AquaOperationsView> with TickerProv
           return AlertDialog(
           title: Text(isEdit ? 'Sửa lịch cho ăn' : 'Thêm lịch cho ăn'),
           content: SizedBox(
-            width: 450,
+            width: AppSizes.dialogWidth(context, 450),
             child: SingleChildScrollView(child: Column(mainAxisSize: MainAxisSize.min, children: [
               InkWell(
                 onTap: () async {
@@ -1008,7 +1008,7 @@ class _AquaOperationsViewState extends State<AquaOperationsView> with TickerProv
         builder: (ctx, setSt) => AlertDialog(
           title: Text(isEdit ? 'Sửa vụ nuôi' : 'Tạo vụ nuôi'),
           content: SizedBox(
-            width: 480,
+            width: AppSizes.dialogWidth(context, 480),
             child: SingleChildScrollView(child: Column(mainAxisSize: MainAxisSize.min, children: [
               TextField(controller: nameC, decoration: const InputDecoration(labelText: 'Tên vụ *', prefixIcon: Icon(Icons.agriculture))),
               const SizedBox(height: 10),
@@ -1212,7 +1212,7 @@ class _AquaOperationsViewState extends State<AquaOperationsView> with TickerProv
         builder: (ctx, setSt) => AlertDialog(
           title: Text(isEdit ? 'Sửa thiết bị' : 'Thêm thiết bị'),
           content: SizedBox(
-            width: 450,
+            width: AppSizes.dialogWidth(context, 450),
             child: SingleChildScrollView(child: Column(mainAxisSize: MainAxisSize.min, children: [
               TextField(controller: nameC, decoration: const InputDecoration(labelText: 'Tên thiết bị *', prefixIcon: Icon(Icons.settings))),
               const SizedBox(height: 10),
@@ -1657,7 +1657,7 @@ class _AquaOperationsViewState extends State<AquaOperationsView> with TickerProv
           const Expanded(child: Text('Chi tiết nhật ký', style: TextStyle(fontSize: 18))),
         ]),
         content: SizedBox(
-          width: 450,
+          width: AppSizes.dialogWidth(context, 450),
           child: SingleChildScrollView(child: Column(mainAxisSize: MainAxisSize.min, crossAxisAlignment: CrossAxisAlignment.start, children: [
             _detailRow('📅 Ngày', dateFmt.format(log.date)),
             _detailRow('🕐 Ca', shiftLabel),
@@ -1723,7 +1723,7 @@ class _AquaOperationsViewState extends State<AquaOperationsView> with TickerProv
           Expanded(child: Text('Bệnh: ${d.diseaseName}', style: const TextStyle(fontSize: 18))),
         ]),
         content: SizedBox(
-          width: 450,
+          width: AppSizes.dialogWidth(context, 450),
           child: SingleChildScrollView(child: Column(mainAxisSize: MainAxisSize.min, crossAxisAlignment: CrossAxisAlignment.start, children: [
             _detailRow('📅 Phát hiện', dateFmt.format(d.detectedDate)),
             _detailRow('📊 Trạng thái', statusLabel),
@@ -1782,7 +1782,7 @@ class _AquaOperationsViewState extends State<AquaOperationsView> with TickerProv
           Expanded(child: Text('Điều trị: ${t.medicineName}', style: const TextStyle(fontSize: 18))),
         ]),
         content: SizedBox(
-          width: 450,
+          width: AppSizes.dialogWidth(context, 450),
           child: SingleChildScrollView(child: Column(mainAxisSize: MainAxisSize.min, crossAxisAlignment: CrossAxisAlignment.start, children: [
             _detailRow('📅 Bắt đầu', dateFmt.format(t.startDate)),
             _detailRow('📊 Trạng thái', statusLabel),
@@ -1840,7 +1840,7 @@ class _AquaOperationsViewState extends State<AquaOperationsView> with TickerProv
           const Expanded(child: Text('Chi tiết thay nước', style: TextStyle(fontSize: 18))),
         ]),
         content: SizedBox(
-          width: 450,
+          width: AppSizes.dialogWidth(context, 450),
           child: SingleChildScrollView(child: Column(mainAxisSize: MainAxisSize.min, crossAxisAlignment: CrossAxisAlignment.start, children: [
             _detailRow('📅 Ngày', dateFmt.format(w.date)),
             _detailRow('💧 Tỷ lệ', '${w.percentChanged.toStringAsFixed(0)}%'),
@@ -1924,7 +1924,7 @@ class _AquaOperationsViewState extends State<AquaOperationsView> with TickerProv
         builder: (ctx, setSt) => AlertDialog(
           title: Text(isEdit ? 'Sửa nhật ký' : 'Ghi nhật ký'),
           content: SizedBox(
-            width: 450,
+            width: AppSizes.dialogWidth(context, 450),
             child: SingleChildScrollView(child: Column(mainAxisSize: MainAxisSize.min, children: [
               Row(children: [
                 Expanded(child: InkWell(
@@ -2080,7 +2080,7 @@ class _AquaOperationsViewState extends State<AquaOperationsView> with TickerProv
         builder: (ctx, setSt) => AlertDialog(
           title: Text(isEdit ? 'Sửa thay nước' : 'Ghi nhận thay nước'),
           content: SizedBox(
-            width: 420,
+            width: AppSizes.dialogWidth(context, 420),
             child: SingleChildScrollView(child: Column(mainAxisSize: MainAxisSize.min, children: [
               // Ngày ghi nhận
               InkWell(
@@ -2385,7 +2385,7 @@ class _AquaOperationsViewState extends State<AquaOperationsView> with TickerProv
             Text('Đo kích thước cá'),
           ]),
           content: SizedBox(
-            width: 460,
+            width: AppSizes.dialogWidth(context, 460),
             child: SingleChildScrollView(
               child: Column(mainAxisSize: MainAxisSize.min, children: [
                 // Pond selector
