@@ -1553,20 +1553,24 @@ class _FarmMapViewState extends State<FarmMapView> {
 
     // 9. Xuất bán
     for (final so in dp.saleOrders) {
-      bool relevant = false;
-      for (final b in dp.fishBatches.where((b) => b.pondId == pond.id)) {
-        if (so.items.any((it) => it['fishBatchId'] == b.id)) {
-          relevant = true;
-          break;
+      // Match by pondId (primary) or by fishBatchId matching pond's batches
+      bool relevant = so.pondId == pond.id;
+      if (!relevant) {
+        for (final b in dp.fishBatches.where((b) => b.pondId == pond.id)) {
+          if (so.fishBatchId == b.id || so.items.any((it) => it['fishBatchId'] == b.id)) {
+            relevant = true;
+            break;
+          }
         }
       }
       if (!relevant) continue;
       final customer = dp.customers.where((c) => c.id == so.customerId).firstOrNull;
+      final totalQty = so.items.fold<int>(0, (s, it) => s + ((it['qty'] as num?)?.toInt() ?? (it['quantity'] as num?)?.toInt() ?? 0));
       events.add(_PondTimelineEvent(
         date: so.createdAt,
         icon: Icons.shopping_bag_rounded,
         color: AppColors.secondary,
-        title: 'Xuất bán',
+        title: 'Xuất bán${totalQty > 0 ? ': $totalQty con' : ''}',
         subtitle: '${customer?.name ?? 'Khách lẻ'} · ${currFmt.format(so.totalAmount)}đ',
       ));
     }
@@ -3940,25 +3944,30 @@ class _FarmMapViewState extends State<FarmMapView> {
         _showSnack('Số lượng không hợp lệ (tối đa $qtyInPond con)');
         return;
       }
+      if (customerId == null || customerId!.isEmpty) {
+        _showSnack('Vui lòng chọn khách hàng');
+        return;
+      }
 
       final unitPrice = double.tryParse(priceC.text) ?? 0;
       // Tính theo con: totalAmount = số lượng × đơn giá/con
       final totalAmount = sellQty * unitPrice;
+      final speciesName = dp.speciesById(batch.speciesId)?.name ?? 'Cá';
 
-      // Create sale order (backend handles fishBatch deduction + stock issue creation via _onSaleCompleted)
+      // Create sale order (backend handles fishBatch deduction + stock issue + payment voucher via _onSaleCompleted)
       await dp.create('saleorders', {
-        'customerId': customerId ?? '',
+        'customerId': customerId,
         'date': DateTime.now().toIso8601String(),
         'pondId': pond.id,
         'fishBatchId': batch.id,
-        'items': [{'speciesId': batch.speciesId, 'qty': sellQty, 'unitPrice': unitPrice}],
+        'items': [{'speciesId': batch.speciesId, 'fishBatchId': batch.id, 'productName': speciesName, 'qty': sellQty, 'unitPrice': unitPrice}],
         'totalAmount': totalAmount,
         'status': 'completed',
         'note': noteC.text.trim(),
       });
 
       // Reload data to get backend-updated fishBatch and products
-      await Future.wait([dp.reload('fishbatches'), dp.reload('products'), dp.reload('stockissues'), dp.reload('saleorders'), dp.reload('ponds')]);
+      await Future.wait([dp.reload('fishbatches'), dp.reload('products'), dp.reload('stockissues'), dp.reload('saleorders'), dp.reload('ponds'), dp.reload('paymentvouchers')]);
 
       _showSnack('Xuất bán $sellQty con – ${_currFmt.format(totalAmount)}đ');
     }

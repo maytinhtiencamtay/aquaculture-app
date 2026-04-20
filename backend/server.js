@@ -1489,8 +1489,9 @@ saleRouter.delete('/:id', (req, res) => {
     const cust = db.customers.find(c => c._id === item.customerId);
     if (cust) cust.debt = Math.max(0, (cust.debt || 0) - (item.totalAmount || 0));
   }
-  // Remove auto-created stock issues for this sale
+  // Remove auto-created stock issues and payment vouchers for this sale
   db.stockissues = db.stockissues.filter(si => si.saleOrderId !== req.params.id);
+  db.paymentvouchers = db.paymentvouchers.filter(pv => !(pv.referenceId === req.params.id && pv.referenceType === 'sale_order'));
   db.saleorders = db.saleorders.filter(i => i._id !== req.params.id);
   saveDb();
   res.json({ message: 'Deleted' });
@@ -1501,6 +1502,12 @@ function _onSaleCompleted(order) {
   if (order._saleProcessed) return;
   order._saleProcessed = true;
 
+  // Resolve fishBatchId from items if order-level is missing
+  if (!order.fishBatchId && order.items && order.items.length > 0) {
+    const fbId = order.items.find(it => it.fishBatchId)?.fishBatchId;
+    if (fbId) order.fishBatchId = fbId;
+  }
+
   // 0) Deduct fish from fishBatch
   if (order.fishBatchId && order.items && order.items.length > 0) {
     const batch = db.fishbatches.find(b => b._id === order.fishBatchId);
@@ -1510,8 +1517,9 @@ function _onSaleCompleted(order) {
       const available = batch.currentQuantity || 0;
       const actualSold = Math.min(totalSold, available);
       batch.currentQuantity = Math.max(0, available - actualSold);
-      // Update pondAllocations
-      if (batch.pondAllocations && order.pondId) {
+      // Update pondAllocations (create if not exists)
+      if (order.pondId) {
+        if (!batch.pondAllocations) batch.pondAllocations = [];
         const alloc = batch.pondAllocations.find(a => a.pondId === order.pondId);
         if (alloc) {
           alloc.quantity = Math.max(0, (alloc.quantity || 0) - actualSold);
@@ -1534,16 +1542,26 @@ function _onSaleCompleted(order) {
     }
   }
 
-  // 1) Auto-create StockIssue for sale items (only for product-based items)
-  const productItems = (order.items || []).filter(it => it.productId);
-  if (productItems.length > 0) {
-    const issueItems = productItems.map(it => ({
-      productId: it.productId || '',
-      productName: it.productName || it.product || '',
-      qty: it.qty || it.quantity || 0,
-      unitPrice: it.price || it.unitPrice || 0,
-      unit: it.unit || 'kg',
-    }));
+  // 1) Auto-create StockIssue for ALL sale items (both product and fish)
+  const allItems = order.items || [];
+  if (allItems.length > 0) {
+    const issueItems = allItems.map(it => {
+      // For fish items (speciesId), look up species name
+      let productName = it.productName || it.product || '';
+      if (!productName && it.speciesId) {
+        const sp = db.species.find(s => s._id === it.speciesId);
+        productName = sp ? sp.name : 'Cá';
+      }
+      return {
+        productId: it.productId || '',
+        speciesId: it.speciesId || '',
+        fishBatchId: it.fishBatchId || order.fishBatchId || '',
+        productName,
+        qty: it.qty || it.quantity || 0,
+        unitPrice: it.unitPrice || it.price || 0,
+        unit: it.unit || 'con',
+      };
+    });
     const stockIssue = {
       _id: genId(),
       code: nextCode('XK', db.stockissues),
@@ -1551,11 +1569,13 @@ function _onSaleCompleted(order) {
       type: 'sale',
       saleOrderId: order._id,
       pondId: order.pondId || '',
+      fishBatchId: order.fishBatchId || '',
       branchId: order.branchId || '1',
+      storeId: order.storeId || '',
       items: issueItems,
       totalAmount: order.totalAmount || 0,
       status: 'approved',
-      note: `Xuất kho tự động cho đơn bán #${order._id}`,
+      note: `Xuất bán tự động cho đơn #${order._id}`,
       createdBy: order.createdBy || '1',
       issuedTo: '',
       approvedBy: order.createdBy || '1',
@@ -1564,7 +1584,7 @@ function _onSaleCompleted(order) {
     };
     db.stockissues.push(stockIssue);
 
-    // Decrease product stock
+    // Decrease product stock (only for product-based items)
     for (const it of issueItems) {
       if (it.productId) {
         const prod = db.products.find(p => p._id === it.productId);
@@ -1577,6 +1597,33 @@ function _onSaleCompleted(order) {
   if (order.customerId && order.totalAmount > 0) {
     const cust = db.customers.find(c => c._id === order.customerId);
     if (cust) cust.debt = (cust.debt || 0) + order.totalAmount;
+  }
+
+  // 3) Auto-create Payment Voucher (Phiếu thu)
+  if (order.customerId && order.totalAmount > 0) {
+    const cust = db.customers.find(c => c._id === order.customerId);
+    const pv = {
+      _id: genId(),
+      code: nextCode('PT', db.paymentvouchers),
+      type: 'receipt',
+      category: 'ban_hang',
+      amount: order.totalAmount,
+      contactName: cust ? cust.name : '',
+      contactId: order.customerId,
+      contactType: 'customer',
+      description: `Thu tiền đơn bán hàng`,
+      date: new Date().toISOString(),
+      paymentMethod: 'cash',
+      status: 'draft',
+      referenceId: order._id,
+      referenceType: 'sale_order',
+      note: order.note || '',
+      createdBy: order.createdBy || '1',
+      approvedBy: '',
+      storeId: order.storeId || '',
+      createdAt: new Date().toISOString(),
+    };
+    db.paymentvouchers.push(pv);
   }
 }
 

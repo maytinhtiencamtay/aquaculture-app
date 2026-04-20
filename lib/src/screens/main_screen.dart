@@ -5102,9 +5102,18 @@ class _SaleViewState extends State<_SaleView> {
                                 ],
                               ),
                               ...s.items.map((item) {
-                                final pName = (item['productName'] as String?) ?? dp.productById(item['productId'] as String? ?? '')?.name ?? '?';
-                                final qty = (item['quantity'] as num?)?.toDouble() ?? 0;
-                                final price = (item['price'] as num?)?.toDouble() ?? 0;
+                                String pName = (item['productName'] as String?) ?? '';
+                                if (pName.isEmpty) {
+                                  final pid = item['productId'] as String? ?? '';
+                                  if (pid.isNotEmpty) pName = dp.productById(pid)?.name ?? '?';
+                                }
+                                if (pName.isEmpty) {
+                                  final sid = item['speciesId'] as String? ?? '';
+                                  if (sid.isNotEmpty) pName = dp.speciesById(sid)?.name ?? 'Cá';
+                                }
+                                if (pName.isEmpty) pName = '?';
+                                final qty = (item['qty'] as num?)?.toDouble() ?? (item['quantity'] as num?)?.toDouble() ?? 0;
+                                final price = (item['unitPrice'] as num?)?.toDouble() ?? (item['price'] as num?)?.toDouble() ?? 0;
                                 final amount = (item['amount'] as num?)?.toDouble() ?? qty * price;
                                 return TableRow(children: [
                                   Padding(padding: const EdgeInsets.symmetric(vertical: 4), child: Text(pName, style: const TextStyle(fontSize: 12))),
