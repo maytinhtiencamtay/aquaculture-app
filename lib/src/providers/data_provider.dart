@@ -232,7 +232,7 @@ class DataProvider extends ChangeNotifier {
   // When a resource changes on the backend, these related resources
   // are also affected and need to be reloaded.
   static const _cascadeReloads = <String, List<String>>{
-    'saleorders':      ['stockissues', 'products', 'customers'],
+    'saleorders':      ['stockissues', 'paymentvouchers', 'products', 'customers', 'fishbatches', 'ponds'],
     'purchaseorders':  ['paymentvouchers', 'stockreceipts'],
     'stockreceipts':   ['products'],
     'stockissues':     ['products', 'fishbatches', 'feedinglogs'],
