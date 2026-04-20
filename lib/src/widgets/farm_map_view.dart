@@ -3820,6 +3820,7 @@ class _FarmMapViewState extends State<FarmMapView> {
   Future<void> _showSellDialog(Pond pond, List<FishBatch> batches) async {
     FishBatch? selectedBatch = batches.first;
     String? customerId = dp.customers.isNotEmpty ? dp.customers.first.id : null;
+    final newCustNameC = TextEditingController();
     final qtyC = TextEditingController();
     final priceC = TextEditingController();
     final noteC = TextEditingController();
@@ -3911,13 +3912,30 @@ class _FarmMapViewState extends State<FarmMapView> {
               const SizedBox(height: 12),
               TextField(controller: priceC, decoration: const InputDecoration(labelText: 'Đơn giá (VNĐ/con)', prefixIcon: Icon(Icons.attach_money)), keyboardType: TextInputType.number),
               const SizedBox(height: 12),
-              if (dp.customers.isNotEmpty)
+              // Khách hàng: dropdown nếu có, hoặc ô nhập tên KH mới
+              if (dp.customers.isNotEmpty) ...[
                 DropdownButtonFormField<String>(
                   initialValue: customerId,
                   decoration: const InputDecoration(labelText: 'Khách hàng', prefixIcon: Icon(Icons.person)),
-                  items: dp.customers.map((c) => DropdownMenuItem(value: c.id, child: Text(c.name))).toList(),
+                  items: [
+                    ...dp.customers.map((c) => DropdownMenuItem(value: c.id, child: Text(c.name))),
+                    const DropdownMenuItem(value: '__new__', child: Text('+ Thêm KH mới...', style: TextStyle(color: AppColors.primary, fontWeight: FontWeight.w600))),
+                  ],
                   onChanged: (v) => ss(() => customerId = v),
                 ),
+                if (customerId == '__new__') ...[
+                  const SizedBox(height: 8),
+                  TextField(
+                    controller: newCustNameC,
+                    decoration: const InputDecoration(labelText: 'Tên khách hàng mới', prefixIcon: Icon(Icons.person_add), hintText: 'VD: Cty ABC'),
+                  ),
+                ],
+              ] else ...[
+                TextField(
+                  controller: newCustNameC,
+                  decoration: const InputDecoration(labelText: 'Tên khách hàng', prefixIcon: Icon(Icons.person_add), hintText: 'VD: Cty ABC'),
+                ),
+              ],
               const SizedBox(height: 12),
               TextField(controller: noteC, decoration: const InputDecoration(labelText: 'Ghi chú', prefixIcon: Icon(Icons.note)), maxLines: 2),
             ]),
@@ -3944,9 +3962,30 @@ class _FarmMapViewState extends State<FarmMapView> {
         _showSnack('Số lượng không hợp lệ (tối đa $qtyInPond con)');
         return;
       }
-      if (customerId == null || customerId!.isEmpty) {
-        _showSnack('Vui lòng chọn khách hàng');
-        return;
+
+      // Handle customer: create new if needed
+      String? finalCustomerId = customerId;
+      if (finalCustomerId == '__new__' || finalCustomerId == null) {
+        final newName = newCustNameC.text.trim();
+        if (newName.isEmpty) {
+          _showSnack('Vui lòng nhập tên khách hàng');
+          return;
+        }
+        // Auto-create customer
+        final countBefore = dp.customers.length;
+        final ok2 = await dp.create('customers', {
+          'name': newName,
+          'phone': '',
+          'email': '',
+          'address': '',
+          'debt': 0,
+        });
+        if (ok2 && dp.customers.length > countBefore) {
+          finalCustomerId = dp.customers.last.id;
+        } else {
+          _showSnack('Không thể tạo khách hàng');
+          return;
+        }
       }
 
       final unitPrice = double.tryParse(priceC.text) ?? 0;
@@ -3956,7 +3995,7 @@ class _FarmMapViewState extends State<FarmMapView> {
 
       // Create sale order (backend handles fishBatch deduction + stock issue + payment voucher via _onSaleCompleted)
       await dp.create('saleorders', {
-        'customerId': customerId,
+        'customerId': finalCustomerId,
         'date': DateTime.now().toIso8601String(),
         'pondId': pond.id,
         'fishBatchId': batch.id,
