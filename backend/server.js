@@ -1562,12 +1562,15 @@ function _onSaleCompleted(order) {
         unit: it.unit || 'con',
       };
     });
+    const custForIssue = order.customerId ? db.customers.find(c => c._id === order.customerId) : null;
     const stockIssue = {
       _id: genId(),
       code: nextCode('XK', db.stockissues),
       date: new Date().toISOString(),
       type: 'sale',
       saleOrderId: order._id,
+      customerId: order.customerId || '',
+      customerName: custForIssue ? custForIssue.name : '',
       pondId: order.pondId || '',
       fishBatchId: order.fishBatchId || '',
       branchId: order.branchId || '1',
@@ -1575,7 +1578,7 @@ function _onSaleCompleted(order) {
       items: issueItems,
       totalAmount: order.totalAmount || 0,
       status: 'approved',
-      note: `Xuất bán tự động cho đơn #${order._id}`,
+      note: `Xuất bán cho ${custForIssue ? custForIssue.name : 'KH'} – ${issueItems.map(it => `${it.productName} ×${it.qty}`).join(', ')}`,
       createdBy: order.createdBy || '1',
       issuedTo: '',
       approvedBy: order.createdBy || '1',
@@ -1602,6 +1605,14 @@ function _onSaleCompleted(order) {
   // 3) Auto-create Payment Voucher (Phiếu thu)
   if (order.customerId && order.totalAmount > 0) {
     const cust = db.customers.find(c => c._id === order.customerId);
+    // Build item description for the voucher
+    const itemDescs = (order.items || []).map(it => {
+      const name = it.productName || '';
+      const qty = it.qty || it.quantity || 0;
+      const price = it.unitPrice || it.price || 0;
+      return `${name} ×${qty} (${price.toLocaleString('vi-VN')}đ/con)`;
+    }).join(', ');
+    const pondInfo = order.pondId ? (db.ponds.find(p => p._id === order.pondId) || {}).code || '' : '';
     const pv = {
       _id: genId(),
       code: nextCode('PT', db.paymentvouchers),
@@ -1611,9 +1622,9 @@ function _onSaleCompleted(order) {
       contactName: cust ? cust.name : '',
       contactId: order.customerId,
       contactType: 'customer',
-      description: `Thu tiền đơn bán hàng`,
+      description: `Thu tiền bán: ${itemDescs}${pondInfo ? ' – Ao ' + pondInfo : ''}`,
       date: new Date().toISOString(),
-      paymentMethod: 'cash',
+      paymentMethod: order.paymentMethod || 'cash',
       status: 'draft',
       referenceId: order._id,
       referenceType: 'sale_order',

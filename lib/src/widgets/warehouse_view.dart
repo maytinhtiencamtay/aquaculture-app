@@ -1317,11 +1317,17 @@ class _WarehouseViewState extends State<WarehouseView> with SingleTickerProvider
                   itemBuilder: (_, i) {
                     final si = issues[i];
                     final pond = si.pondId.isNotEmpty ? dp.pondById(si.pondId) : null;
+                    // Lấy tên KH nếu là phiếu xuất bán
+                    String custName = '';
+                    if (si.type == 'sale' && si.saleOrderId.isNotEmpty) {
+                      final so = dp.saleOrders.where((s) => s.id == si.saleOrderId).firstOrNull;
+                      if (so != null) custName = dp.customerById(so.customerId)?.name ?? '';
+                    }
                     return GestureDetector(
                       onTap: () => _showDocSheet(
                         title: si.code.isNotEmpty ? si.code : 'XK #${si.id.substring(0, 6)}',
                         statusLabel: si.statusLabel, statusColor: _statusColor(si.status),
-                        info: [('Loại', si.typeLabel), if (pond != null) ('Ao', pond.code), ('Ngày', _dtFmt.format(si.date)), if (si.note.isNotEmpty) ('Ghi chú', si.note)],
+                        info: [('Loại', si.typeLabel), if (custName.isNotEmpty) ('Khách hàng', custName), if (pond != null) ('Ao', pond.code), ('Ngày', _dtFmt.format(si.date)), if (si.note.isNotEmpty) ('Ghi chú', si.note)],
                         items: si.items, total: si.totalAmount, totalColor: AppColors.warning,
                       ),
                       child: Card(
@@ -1344,7 +1350,7 @@ class _WarehouseViewState extends State<WarehouseView> with SingleTickerProvider
                                     crossAxisAlignment: CrossAxisAlignment.start,
                                     children: [
                                       Text(si.code.isNotEmpty ? si.code : 'XK #${si.id.substring(0, 6)}', style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 14)),
-                                      Text('${si.typeLabel}${pond != null ? ' • ${pond.code}' : ''}', style: const TextStyle(fontSize: 12, color: AppColors.textSecondary)),
+                                      Text('${si.typeLabel}${custName.isNotEmpty ? ' • $custName' : ''}${pond != null ? ' • ${pond.code}' : ''}', style: const TextStyle(fontSize: 12, color: AppColors.textSecondary)),
                                     ],
                                   ),
                                 ),
