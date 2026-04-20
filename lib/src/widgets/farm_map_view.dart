@@ -3820,7 +3820,8 @@ class _FarmMapViewState extends State<FarmMapView> {
   Future<void> _showSellDialog(Pond pond, List<FishBatch> batches) async {
     FishBatch? selectedBatch = batches.first;
     String? customerId = dp.customers.isNotEmpty ? dp.customers.first.id : null;
-    final newCustNameC = TextEditingController();
+    String customerName = dp.customers.isNotEmpty ? dp.customers.first.name : '';
+    final custTextC = TextEditingController(text: customerName);
     final qtyC = TextEditingController();
     final priceC = TextEditingController();
     final noteC = TextEditingController();
@@ -3912,30 +3913,41 @@ class _FarmMapViewState extends State<FarmMapView> {
               const SizedBox(height: 12),
               TextField(controller: priceC, decoration: const InputDecoration(labelText: 'Đơn giá (VNĐ/con)', prefixIcon: Icon(Icons.attach_money)), keyboardType: TextInputType.number),
               const SizedBox(height: 12),
-              // Khách hàng: dropdown nếu có, hoặc ô nhập tên KH mới
-              if (dp.customers.isNotEmpty) ...[
-                DropdownButtonFormField<String>(
-                  initialValue: customerId,
-                  decoration: const InputDecoration(labelText: 'Khách hàng', prefixIcon: Icon(Icons.person)),
-                  items: [
-                    ...dp.customers.map((c) => DropdownMenuItem(value: c.id, child: Text(c.name))),
-                    const DropdownMenuItem(value: '__new__', child: Text('+ Thêm KH mới...', style: TextStyle(color: AppColors.primary, fontWeight: FontWeight.w600))),
-                  ],
-                  onChanged: (v) => ss(() => customerId = v),
-                ),
-                if (customerId == '__new__') ...[
-                  const SizedBox(height: 8),
-                  TextField(
-                    controller: newCustNameC,
-                    decoration: const InputDecoration(labelText: 'Tên khách hàng mới', prefixIcon: Icon(Icons.person_add), hintText: 'VD: Cty ABC'),
-                  ),
-                ],
-              ] else ...[
-                TextField(
-                  controller: newCustNameC,
-                  decoration: const InputDecoration(labelText: 'Tên khách hàng', prefixIcon: Icon(Icons.person_add), hintText: 'VD: Cty ABC'),
-                ),
-              ],
+              // Khách hàng: Autocomplete tìm kiếm, chưa có thì thêm mới
+              Autocomplete<String>(
+                initialValue: custTextC.value,
+                optionsBuilder: (textEditingValue) {
+                  final query = textEditingValue.text.toLowerCase();
+                  if (query.isEmpty) return dp.customers.map((c) => c.name);
+                  return dp.customers
+                      .where((c) => c.name.toLowerCase().contains(query))
+                      .map((c) => c.name);
+                },
+                fieldViewBuilder: (ctx2, controller, focusNode, onSubmitted) {
+                  return TextField(
+                    controller: controller,
+                    focusNode: focusNode,
+                    decoration: const InputDecoration(
+                      labelText: 'Khách hàng',
+                      prefixIcon: Icon(Icons.person),
+                      hintText: 'Tìm hoặc nhập tên KH mới',
+                    ),
+                    onChanged: (v) => ss(() {
+                      custTextC.text = v;
+                      // Match existing customer
+                      final match = dp.customers.where((c) => c.name.toLowerCase() == v.toLowerCase().trim()).firstOrNull;
+                      customerId = match?.id;
+                      customerName = v;
+                    }),
+                  );
+                },
+                onSelected: (name) => ss(() {
+                  final match = dp.customers.firstWhere((c) => c.name == name);
+                  customerId = match.id;
+                  customerName = name;
+                  custTextC.text = name;
+                }),
+              ),
               const SizedBox(height: 12),
               TextField(controller: noteC, decoration: const InputDecoration(labelText: 'Ghi chú', prefixIcon: Icon(Icons.note)), maxLines: 2),
             ]),
@@ -3963,28 +3975,34 @@ class _FarmMapViewState extends State<FarmMapView> {
         return;
       }
 
-      // Handle customer: create new if needed
+      // Handle customer: create new if not matched existing
       String? finalCustomerId = customerId;
-      if (finalCustomerId == '__new__' || finalCustomerId == null) {
-        final newName = newCustNameC.text.trim();
+      if (finalCustomerId == null) {
+        final newName = customerName.trim().isNotEmpty ? customerName.trim() : custTextC.text.trim();
         if (newName.isEmpty) {
           _showSnack('Vui lòng nhập tên khách hàng');
           return;
         }
-        // Auto-create customer
-        final countBefore = dp.customers.length;
-        final ok2 = await dp.create('customers', {
-          'name': newName,
-          'phone': '',
-          'email': '',
-          'address': '',
-          'debt': 0,
-        });
-        if (ok2 && dp.customers.length > countBefore) {
-          finalCustomerId = dp.customers.last.id;
+        // Check one more time if name matches existing
+        final match = dp.customers.where((c) => c.name.toLowerCase() == newName.toLowerCase()).firstOrNull;
+        if (match != null) {
+          finalCustomerId = match.id;
         } else {
-          _showSnack('Không thể tạo khách hàng');
-          return;
+          // Auto-create customer
+          final countBefore = dp.customers.length;
+          final ok2 = await dp.create('customers', {
+            'name': newName,
+            'phone': '',
+            'email': '',
+            'address': '',
+            'debt': 0,
+          });
+          if (ok2 && dp.customers.length > countBefore) {
+            finalCustomerId = dp.customers.last.id;
+          } else {
+            _showSnack('Không thể tạo khách hàng');
+            return;
+          }
         }
       }
 
