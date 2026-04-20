@@ -1476,6 +1476,10 @@ saleRouter.put('/:id', (req, res) => {
   if (oldStatus !== 'completed' && updated.status === 'completed') {
     _onSaleCompleted(updated);
   }
+  // Reverse cascade when completed order is cancelled
+  if (oldStatus === 'completed' && updated.status === 'cancelled' && updated._saleProcessed) {
+    _onSaleCancelled(updated);
+  }
   saveDb();
   res.json(updated);
 });
@@ -1484,10 +1488,9 @@ saleRouter.delete('/:id', (req, res) => {
   if (item && item.storeId && req.user.storeId && item.storeId !== req.user.storeId) {
     return res.status(403).json({ message: 'Không có quyền xoá' });
   }
-  // Reverse customer debt if order was completed
-  if (item && item.status === 'completed' && item.customerId) {
-    const cust = db.customers.find(c => c._id === item.customerId);
-    if (cust) cust.debt = Math.max(0, (cust.debt || 0) - (item.totalAmount || 0));
+  // Reverse all side effects if order was completed
+  if (item && item._saleProcessed) {
+    _onSaleCancelled(item);
   }
   // Remove auto-created stock issues and payment vouchers for this sale
   db.stockissues = db.stockissues.filter(si => si.saleOrderId !== req.params.id);
@@ -1636,6 +1639,62 @@ function _onSaleCompleted(order) {
     };
     db.paymentvouchers.push(pv);
   }
+}
+
+// Reverse all side effects when a completed sale is cancelled or deleted
+function _onSaleCancelled(order) {
+  if (!order._saleProcessed) return;
+  order._saleProcessed = false;
+
+  // 1) Restore fish to fishBatch + pondAllocations
+  if (order.fishBatchId) {
+    const batch = db.fishbatches.find(b => b._id === order.fishBatchId);
+    if (batch) {
+      const totalSold = (order.items || []).reduce((s, it) => s + (it.qty || it.quantity || 0), 0);
+      batch.currentQuantity = (batch.currentQuantity || 0) + totalSold;
+      if (batch.status === 'harvested') batch.status = 'active';
+
+      // Restore pondAllocations
+      if (order.pondId) {
+        if (!batch.pondAllocations) batch.pondAllocations = [];
+        const alloc = batch.pondAllocations.find(a => a.pondId === order.pondId);
+        if (alloc) {
+          alloc.quantity = (alloc.quantity || 0) + totalSold;
+        } else {
+          batch.pondAllocations.push({ pondId: order.pondId, quantity: totalSold });
+        }
+      }
+      batch.updatedAt = new Date().toISOString();
+
+      // Re-activate pond if it was deactivated
+      if (order.pondId) {
+        const pond = db.ponds.find(p => p._id === order.pondId);
+        if (pond && pond.status === 'inactive') {
+          pond.status = 'active';
+          pond.updatedAt = new Date().toISOString();
+        }
+      }
+    }
+  }
+
+  // 2) Restore product stock
+  for (const it of (order.items || [])) {
+    if (it.productId) {
+      const prod = db.products.find(p => p._id === it.productId);
+      if (prod) prod.stock = (prod.stock || 0) + (it.qty || it.quantity || 0);
+    }
+  }
+
+  // 3) Reverse customer debt
+  if (order.customerId && order.totalAmount > 0) {
+    const cust = db.customers.find(c => c._id === order.customerId);
+    if (cust) cust.debt = Math.max(0, (cust.debt || 0) - order.totalAmount);
+  }
+
+  // 4) Remove auto-created stock issues + payment vouchers
+  db.stockissues = db.stockissues.filter(si => si.saleOrderId !== order._id);
+  db.paymentvouchers = db.paymentvouchers.filter(pv =>
+    !(pv.referenceId === order._id && pv.referenceType === 'sale_order'));
 }
 
 app.use('/api/saleorders', saleRouter);

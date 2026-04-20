@@ -4980,6 +4980,77 @@ class _SaleViewState extends State<_SaleView> {
   String _searchQuery = '';
   String _statusFilter = 'all';
 
+  Future<void> _cancelAndReturn(SaleOrder order) async {
+    final dp = context.read<DataProvider>();
+    final cust = dp.customerById(order.customerId);
+    final custName = cust?.name ?? 'KH';
+    final totalQty = order.items.fold<num>(0, (s, it) => s + ((it['qty'] as num?) ?? (it['quantity'] as num?) ?? 0));
+    final itemDescs = order.items.map((it) {
+      final name = (it['productName'] as String?) ?? '?';
+      final qty = (it['qty'] as num?) ?? (it['quantity'] as num?) ?? 0;
+      return '$name ×$qty';
+    }).join(', ');
+
+    final ok = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        icon: const Icon(Icons.undo_rounded, color: Colors.orange, size: 36),
+        title: const Text('Hủy đơn & trả cá'),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text('Khách: $custName'),
+            const SizedBox(height: 4),
+            Text('Sản phẩm: $itemDescs'),
+            const SizedBox(height: 4),
+            Text('Tổng tiền: ${_currencyFmt.format(order.totalAmount)}đ'),
+            const SizedBox(height: 12),
+            Container(
+              padding: const EdgeInsets.all(10),
+              decoration: BoxDecoration(
+                color: Colors.orange.withAlpha(15),
+                borderRadius: BorderRadius.circular(8),
+                border: Border.all(color: Colors.orange.withAlpha(40)),
+              ),
+              child: const Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text('Hệ thống sẽ tự động:', style: TextStyle(fontWeight: FontWeight.w700, fontSize: 13)),
+                  SizedBox(height: 4),
+                  Text('• Trả cá về ao gốc', style: TextStyle(fontSize: 12)),
+                  Text('• Hoàn lại tồn kho sản phẩm', style: TextStyle(fontSize: 12)),
+                  Text('• Giảm công nợ khách hàng', style: TextStyle(fontSize: 12)),
+                  Text('• Xóa phiếu xuất kho & phiếu thu', style: TextStyle(fontSize: 12)),
+                ],
+              ),
+            ),
+          ],
+        ),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('Không')),
+          FilledButton.icon(
+            icon: const Icon(Icons.undo_rounded, size: 18),
+            label: const Text('Xác nhận hủy'),
+            style: FilledButton.styleFrom(backgroundColor: Colors.orange),
+            onPressed: () => Navigator.pop(ctx, true),
+          ),
+        ],
+      ),
+    );
+    if (ok != true) return;
+
+    final success = await dp.update('saleorders', order.id, {
+      ...order.toJson(),
+      'status': 'cancelled',
+    });
+    if (success && mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Đã hủy đơn & trả ${totalQty > 0 ? '$totalQty con' : 'hàng'} về kho/ao'), backgroundColor: Colors.orange),
+      );
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     final dp = context.watch<DataProvider>();
@@ -5076,9 +5147,12 @@ class _SaleViewState extends State<_SaleView> {
                           onSelected: (v) {
                             if (v == 'edit') widget.onEdit(s);
                             if (v == 'delete') widget.onDelete(s);
+                            if (v == 'cancel_return') _cancelAndReturn(s);
                           },
                           itemBuilder: (ctx) => [
                             const PopupMenuItem(value: 'edit', child: ListTile(leading: Icon(Icons.edit, size: 20), title: Text('Sửa'), dense: true, contentPadding: EdgeInsets.zero)),
+                            if (s.status == 'completed')
+                              const PopupMenuItem(value: 'cancel_return', child: ListTile(leading: Icon(Icons.undo_rounded, color: Colors.orange, size: 20), title: Text('Hủy đơn & trả cá', style: TextStyle(color: Colors.orange)), dense: true, contentPadding: EdgeInsets.zero)),
                             const PopupMenuItem(value: 'delete', child: ListTile(leading: Icon(Icons.delete, color: AppColors.error, size: 20), title: Text('Xoá', style: TextStyle(color: AppColors.error)), dense: true, contentPadding: EdgeInsets.zero)),
                           ],
                         ),
