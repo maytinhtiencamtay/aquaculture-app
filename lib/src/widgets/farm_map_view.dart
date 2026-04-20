@@ -12,6 +12,7 @@ import '../models/treatment_log.dart';
 import '../models/feeding_schedule.dart';
 import '../models/equipment.dart';
 import '../models/daily_log.dart';
+import '../models/task.dart';
 import '../models/water_change_log.dart';
 import '../models/size_measurement.dart';
 import '../providers/data_provider.dart';
@@ -1186,7 +1187,21 @@ class _FarmMapViewState extends State<FarmMapView> {
                           color: t.isOverdue ? AppColors.error : AppColors.warning),
                       const SizedBox(width: 8),
                       Expanded(child: Text(t.title, style: const TextStyle(fontSize: 13))),
-                      if (t.isOverdue)
+                      if (t.type == 'transfer')
+                        InkWell(
+                          onTap: () => _executeScheduledTransfer(t, pond),
+                          borderRadius: BorderRadius.circular(6),
+                          child: Container(
+                            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                            decoration: BoxDecoration(
+                              color: AppColors.info.withAlpha(20),
+                              borderRadius: BorderRadius.circular(6),
+                              border: Border.all(color: AppColors.info.withAlpha(60)),
+                            ),
+                            child: const Text('Thực hiện', style: TextStyle(fontSize: 11, color: AppColors.info, fontWeight: FontWeight.w700)),
+                          ),
+                        ),
+                      if (t.isOverdue && t.type != 'transfer')
                         Text('Quá hạn', style: TextStyle(fontSize: 10, color: AppColors.error, fontWeight: FontWeight.w600)),
                     ],
                   ),
@@ -2161,12 +2176,16 @@ class _FarmMapViewState extends State<FarmMapView> {
     final feedC = TextEditingController();
     final healthC = TextEditingController();
     final incidentC = TextEditingController();
-    String shift = 'morning';
     String weather = 'sunny';
     DateTime selectedDate = DateTime.now();
-    final now = TimeOfDay.now();
-    if (now.hour >= 17) shift = 'night';
-    else if (now.hour >= 12) shift = 'afternoon';
+
+    // Auto-detect shift from hour
+    String _shiftFromHour(int hour) {
+      if (hour >= 17) return 'night';
+      if (hour >= 12) return 'afternoon';
+      return 'morning';
+    }
+    String shift = _shiftFromHour(selectedDate.hour);
 
     final ok = await showDialog<bool>(
       context: context,
@@ -2181,7 +2200,11 @@ class _FarmMapViewState extends State<FarmMapView> {
                   final d = await showDatePicker(context: ctx, initialDate: selectedDate, firstDate: DateTime(2020), lastDate: DateTime.now());
                   if (d != null) {
                     final t = await showTimePicker(context: ctx, initialTime: TimeOfDay.fromDateTime(selectedDate));
-                    setSt(() => selectedDate = DateTime(d.year, d.month, d.day, t?.hour ?? selectedDate.hour, t?.minute ?? selectedDate.minute));
+                    final newDate = DateTime(d.year, d.month, d.day, t?.hour ?? selectedDate.hour, t?.minute ?? selectedDate.minute);
+                    setSt(() {
+                      selectedDate = newDate;
+                      shift = _shiftFromHour(newDate.hour);
+                    });
                   }
                 },
                 borderRadius: BorderRadius.circular(12),
@@ -2887,6 +2910,108 @@ class _FarmMapViewState extends State<FarmMapView> {
     }
   }
 
+  /// Execute a scheduled transfer task: parse transfer metadata from task.note,
+  /// move fish between pond allocations, create transfer record, mark task done.
+  Future<void> _executeScheduledTransfer(Task task, Pond sourcePond) async {
+    // Parse transfer data from task.note (format: key:value|key:value)
+    final meta = <String, String>{};
+    for (final part in (task.note).split('|')) {
+      final kv = part.split(':');
+      if (kv.length == 2) meta[kv[0].trim()] = kv[1].trim();
+    }
+    final fishBatchId = meta['fishBatchId'] ?? '';
+    final toPondId = meta['toPondId'] ?? '';
+    final qty = int.tryParse(meta['qty'] ?? '') ?? 0;
+
+    if (fishBatchId.isEmpty || toPondId.isEmpty || qty <= 0) {
+      _showSnack('Dữ liệu chuyển cá không hợp lệ');
+      return;
+    }
+
+    final batch = dp.fishBatches.where((b) => b.id == fishBatchId).firstOrNull;
+    if (batch == null) {
+      _showSnack('Không tìm thấy lô cá');
+      return;
+    }
+
+    final qtyInPond = batch.quantityInPond(sourcePond.id);
+    final actualQty = qty > qtyInPond ? qtyInPond : qty;
+    if (actualQty <= 0) {
+      _showSnack('Ao nguồn không còn cá để chuyển');
+      return;
+    }
+
+    final targetPond = dp.pondById(toPondId);
+    final targetCode = targetPond?.code ?? '?';
+
+    // Confirm
+    final ok = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('Xác nhận chuyển cá'),
+        content: Text('Chuyển $actualQty con từ ${sourcePond.code} sang $targetCode?${actualQty != qty ? '\n(Ao chỉ còn $actualQty con, kế hoạch $qty con)' : ''}'),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('Hủy')),
+          FilledButton(onPressed: () => Navigator.pop(ctx, true), child: const Text('Chuyển ngay')),
+        ],
+      ),
+    );
+    if (ok != true) return;
+
+    // Update pond allocations
+    final newAllocs = List<Map<String, dynamic>>.from(batch.pondAllocations);
+    final srcIdx = newAllocs.indexWhere((a) => a['pondId'] == sourcePond.id);
+    if (srcIdx >= 0) {
+      final remaining = ((newAllocs[srcIdx]['quantity'] as num?)?.toInt() ?? 0) - actualQty;
+      if (remaining <= 0) {
+        newAllocs.removeAt(srcIdx);
+      } else {
+        newAllocs[srcIdx] = {'pondId': sourcePond.id, 'quantity': remaining};
+      }
+    }
+    final dstIdx = newAllocs.indexWhere((a) => a['pondId'] == toPondId);
+    if (dstIdx >= 0) {
+      newAllocs[dstIdx] = {'pondId': toPondId, 'quantity': ((newAllocs[dstIdx]['quantity'] as num?)?.toInt() ?? 0) + actualQty};
+    } else {
+      newAllocs.add({'pondId': toPondId, 'quantity': actualQty});
+    }
+
+    await dp.update('fishbatches', batch.id, {
+      ...batch.toJson(),
+      'pondAllocations': newAllocs,
+      'pondId': newAllocs.isNotEmpty ? newAllocs.first['pondId'] : batch.pondId,
+    });
+
+    // Create transfer record
+    await dp.create('transfers', {
+      'fromPondId': sourcePond.id,
+      'toPondId': toPondId,
+      'fishBatchId': batch.id,
+      'qty': actualQty,
+      'date': DateTime.now().toIso8601String(),
+      'reason': 'Thực hiện chuyển theo lịch: ${task.title}',
+    });
+
+    // Activate target pond if inactive
+    if (targetPond != null && targetPond.status == 'inactive') {
+      await dp.update('ponds', targetPond.id, {...targetPond.toJson(), 'status': 'active'});
+    }
+
+    // Deactivate source pond if no more fish
+    final srcHasFish = newAllocs.any((a) => a['pondId'] == sourcePond.id && (a['quantity'] as num? ?? 0) > 0);
+    if (!srcHasFish) {
+      final otherBatchesInSrc = dp.batchesForPond(sourcePond.id).where((b) => b.id != batch.id && b.status == 'active');
+      if (otherBatchesInSrc.isEmpty) {
+        await dp.update('ponds', sourcePond.id, {...sourcePond.toJson(), 'status': 'inactive'});
+      }
+    }
+
+    // Mark task as completed
+    await dp.update('tasks', task.id, {...task.toJson(), 'status': 'completed'});
+
+    _showSnack('Đã chuyển $actualQty con sang $targetCode');
+  }
+
   // 3) CHO ĂN
   Future<void> _showFeedDialog(Pond pond, List<FishBatch> batches) async {
     final noteC = TextEditingController();
@@ -3270,7 +3395,7 @@ class _FarmMapViewState extends State<FarmMapView> {
         'branchId': branchId,
         'items': lineItems,
         'totalAmount': total,
-        'status': 'draft',
+        'status': 'approved',
         'note': () {
           final parts = <String>['Cho cá ăn Ao ${pond.code}'];
           for (final b in batches) {
@@ -3286,7 +3411,7 @@ class _FarmMapViewState extends State<FarmMapView> {
         'createdBy': '',
         'issuedTo': issuedTo ?? '',
       });
-      _showSnack('Đã tạo phiếu xuất kho $issueCode. Chờ duyệt để xuất kho cho ăn.');
+      _showSnack('Đã tạo phiếu cho ăn $issueCode – tự động trừ kho');
     }
   }
 
@@ -5220,9 +5345,15 @@ class _PondCellState extends State<_PondCell> with SingleTickerProviderStateMixi
       growthProgress = (daysOfCulture / growthDays).clamp(0.0, 1.0);
     }
 
-    // Scheduled transfer date
+    // Scheduled transfer date + qty
     final scheduledTransfer = dp.tasksForPond(pond.id).where((t) => t.type == 'transfer' && t.status == 'pending').toList();
     final nextTransferDate = scheduledTransfer.isNotEmpty ? scheduledTransfer.first.dueDate : null;
+    int? pendingTransferQty;
+    if (scheduledTransfer.isNotEmpty) {
+      final note = scheduledTransfer.first.note;
+      final m = RegExp(r'qty:(\d+)').firstMatch(note);
+      if (m != null) pendingTransferQty = int.tryParse(m.group(1)!);
+    }
 
     // Operation indicators
     final activeDiseases = dp.diseaseLogs.where((d) => d.pondId == pond.id && (d.status == 'detected' || d.status == 'treating')).length;
@@ -5446,7 +5577,7 @@ class _PondCellState extends State<_PondCell> with SingleTickerProviderStateMixi
                               const Spacer(),
                               Icon(Icons.swap_horiz_rounded, size: 14, color: const Color(0xFFFFD54F)),
                               const SizedBox(width: 3),
-                              Text('${nextTransferDate.day}/${nextTransferDate.month}',
+                              Text('${pendingTransferQty != null ? '${pendingTransferQty} con ' : ''}${nextTransferDate.day}/${nextTransferDate.month}',
                                 style: const TextStyle(color: Color(0xFFFFD54F), fontSize: 12, fontWeight: FontWeight.w700)),
                             ],
                           ],
