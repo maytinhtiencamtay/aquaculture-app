@@ -2861,6 +2861,16 @@ class _FarmMapViewState extends State<FarmMapView> {
     } else {
       // ── Chuyển ngay (logic cũ) ──
       final newAllocs = List<Map<String, dynamic>>.from(batch.pondAllocations);
+
+      // Legacy fallback: older batches may not have pondAllocations yet.
+      // In that case, infer the source allocation from current pond quantity.
+      if (newAllocs.isEmpty && batch.pondId == fromPond.id) {
+        final inferredQty = batch.quantityInPond(fromPond.id);
+        if (inferredQty > 0) {
+          newAllocs.add({'pondId': fromPond.id, 'quantity': inferredQty});
+        }
+      }
+
       final srcIdx = newAllocs.indexWhere((a) => a['pondId'] == fromPond.id);
       if (srcIdx >= 0) {
         final remaining = ((newAllocs[srcIdx]['quantity'] as num?)?.toInt() ?? 0) - transferQty;
@@ -2877,14 +2887,18 @@ class _FarmMapViewState extends State<FarmMapView> {
         newAllocs.add({'pondId': targetPondId, 'quantity': transferQty});
       }
 
-      await dp.update('fishbatches', batch.id, {
+      final updatedBatch = await dp.update('fishbatches', batch.id, {
         ...batch.toJson(),
         'pondAllocations': newAllocs,
         'pondId': newAllocs.isNotEmpty ? newAllocs.first['pondId'] : batch.pondId,
       });
+      if (!updatedBatch) {
+        _showSnack('Không thể cập nhật phân bổ cá khi chuyển ao');
+        return;
+      }
 
       // Create transfer record
-      await dp.create('transfers', {
+      final createdTransfer = await dp.create('transfers', {
         'fromPondId': fromPond.id,
         'toPondId': targetPondId,
         'fishBatchId': batch.id,
@@ -2892,6 +2906,10 @@ class _FarmMapViewState extends State<FarmMapView> {
         'date': selectedDate.toIso8601String(),
         'reason': noteC.text.isNotEmpty ? noteC.text : 'Chuyển cá',
       });
+      if (!createdTransfer) {
+        _showSnack('Đã cập nhật lô cá nhưng không ghi được phiếu chuyển');
+        return;
+      }
 
       if (targetPond != null && targetPond.status == 'inactive') {
         await dp.update('ponds', targetPond.id, {...targetPond.toJson(), 'status': 'active'});
@@ -2960,6 +2978,15 @@ class _FarmMapViewState extends State<FarmMapView> {
 
     // Update pond allocations
     final newAllocs = List<Map<String, dynamic>>.from(batch.pondAllocations);
+
+    // Legacy fallback: older batches may not have pondAllocations yet.
+    if (newAllocs.isEmpty && batch.pondId == sourcePond.id) {
+      final inferredQty = batch.quantityInPond(sourcePond.id);
+      if (inferredQty > 0) {
+        newAllocs.add({'pondId': sourcePond.id, 'quantity': inferredQty});
+      }
+    }
+
     final srcIdx = newAllocs.indexWhere((a) => a['pondId'] == sourcePond.id);
     if (srcIdx >= 0) {
       final remaining = ((newAllocs[srcIdx]['quantity'] as num?)?.toInt() ?? 0) - actualQty;
@@ -2976,14 +3003,18 @@ class _FarmMapViewState extends State<FarmMapView> {
       newAllocs.add({'pondId': toPondId, 'quantity': actualQty});
     }
 
-    await dp.update('fishbatches', batch.id, {
+    final updatedBatch = await dp.update('fishbatches', batch.id, {
       ...batch.toJson(),
       'pondAllocations': newAllocs,
       'pondId': newAllocs.isNotEmpty ? newAllocs.first['pondId'] : batch.pondId,
     });
+    if (!updatedBatch) {
+      _showSnack('Không thể cập nhật phân bổ cá khi thực hiện lịch chuyển');
+      return;
+    }
 
     // Create transfer record
-    await dp.create('transfers', {
+    final createdTransfer = await dp.create('transfers', {
       'fromPondId': sourcePond.id,
       'toPondId': toPondId,
       'fishBatchId': batch.id,
@@ -2991,6 +3022,10 @@ class _FarmMapViewState extends State<FarmMapView> {
       'date': DateTime.now().toIso8601String(),
       'reason': 'Thực hiện chuyển theo lịch: ${task.title}',
     });
+    if (!createdTransfer) {
+      _showSnack('Đã cập nhật lô cá nhưng không ghi được phiếu chuyển theo lịch');
+      return;
+    }
 
     // Activate target pond if inactive
     if (targetPond != null && targetPond.status == 'inactive') {
@@ -4355,9 +4390,29 @@ class _FarmMapViewState extends State<FarmMapView> {
     }
 
     // Show start maintenance dialog
-    final selectedItems = <Map<String, String>>[];
+    final selectedItems = <Map<String, dynamic>>[];
     final selectedMaterials = <Map<String, dynamic>>[];
     final noteCtrl = TextEditingController();
+    final itemDetailCtrls = <String, Map<String, TextEditingController>>{};
+    final dtFmt = DateFormat('dd/MM/yyyy HH:mm');
+
+    String suggestUnit(String name) {
+      final n = name.toLowerCase();
+      if (n.contains('vôi') || n.contains('voi')) return 'kg';
+      if (n.contains('vi sinh')) return 'kg';
+      if (n.contains('phèn') || n.contains('phen')) return 'kg';
+      if (n.contains('khử trùng') || n.contains('khu trung')) return 'kg';
+      if (n.contains('nước') || n.contains('nuoc')) return 'm³';
+      return '';
+    }
+
+    Map<String, TextEditingController> ctrlsFor(String key, Map<String, dynamic> item) {
+      return itemDetailCtrls.putIfAbsent(key, () => {
+        'qty': TextEditingController(text: (item['quantity'] ?? '').toString()),
+        'unit': TextEditingController(text: (item['unit'] ?? '').toString()),
+        'note': TextEditingController(text: (item['note'] ?? '').toString()),
+      });
+    }
 
     final result = await showDialog<bool>(
       context: context,
@@ -4395,16 +4450,24 @@ class _FarmMapViewState extends State<FarmMapView> {
                             spacing: 6,
                             runSpacing: 6,
                             children: cat.value.map((item) {
-                              final isSelected = selectedItems.any((s) => s['name'] == item);
+                              final isSelected = selectedItems.any((s) => s['name'] == item && s['category'] == cat.key);
                               return FilterChip(
                                 label: Text(item, style: TextStyle(fontSize: 12, color: isSelected ? Colors.white : AppColors.textPrimary)),
                                 selected: isSelected,
                                 onSelected: (v) {
                                   setSt(() {
                                     if (v) {
-                                      selectedItems.add({'name': item, 'category': cat.key});
+                                      selectedItems.add({
+                                        'name': item,
+                                        'category': cat.key,
+                                        'scheduledAt': DateTime.now().toIso8601String(),
+                                        'quantity': null,
+                                        'unit': suggestUnit(item),
+                                        'note': '',
+                                      });
                                     } else {
-                                      selectedItems.removeWhere((s) => s['name'] == item);
+                                      selectedItems.removeWhere((s) => s['name'] == item && s['category'] == cat.key);
+                                      itemDetailCtrls.remove('${cat.key}|$item');
                                     }
                                   });
                                 },
@@ -4418,7 +4481,153 @@ class _FarmMapViewState extends State<FarmMapView> {
                       );
                     }),
 
-                    const SizedBox(height: 16),
+                    const SizedBox(height: 12),
+                    // ── Chi tiết từng hạng mục đã chọn ──
+                    if (selectedItems.isNotEmpty) ...[
+                      Row(
+                        children: [
+                          const Text('🕒 Chi tiết hạng mục đã chọn', style: TextStyle(fontSize: 13, fontWeight: FontWeight.w700)),
+                          const Spacer(),
+                          Text('${selectedItems.length} mục', style: const TextStyle(fontSize: 12, color: AppColors.textSecondary)),
+                        ],
+                      ),
+                      const SizedBox(height: 6),
+                      ...List.generate(selectedItems.length, (idx) {
+                        final it = selectedItems[idx];
+                        final key = '${it['category']}|${it['name']}';
+                        final ctrls = ctrlsFor(key, it);
+                        final sched = DateTime.tryParse(it['scheduledAt'] ?? '') ?? DateTime.now();
+                        return Container(
+                          margin: const EdgeInsets.only(bottom: 8),
+                          padding: const EdgeInsets.all(8),
+                          decoration: BoxDecoration(
+                            color: AppColors.primary.withAlpha(8),
+                            borderRadius: BorderRadius.circular(8),
+                            border: Border.all(color: AppColors.primary.withAlpha(30)),
+                          ),
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Row(children: [
+                                Expanded(child: Text('${it['name']}', style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w700))),
+                                Text(it['category'] ?? '', style: const TextStyle(fontSize: 11, color: AppColors.textSecondary)),
+                                IconButton(
+                                  icon: const Icon(Icons.close, size: 18, color: AppColors.error),
+                                  padding: EdgeInsets.zero,
+                                  constraints: const BoxConstraints(),
+                                  onPressed: () => setSt(() {
+                                    selectedItems.removeAt(idx);
+                                    itemDetailCtrls.remove(key);
+                                  }),
+                                ),
+                              ]),
+                              const SizedBox(height: 6),
+                              InkWell(
+                                onTap: () async {
+                                  final d = await showDatePicker(context: ctx, initialDate: sched, firstDate: DateTime(2020), lastDate: DateTime.now().add(const Duration(days: 365)));
+                                  if (d == null) return;
+                                  if (!ctx.mounted) return;
+                                  final t = await showTimePicker(context: ctx, initialTime: TimeOfDay.fromDateTime(sched));
+                                  final dt = DateTime(d.year, d.month, d.day, t?.hour ?? sched.hour, t?.minute ?? sched.minute);
+                                  setSt(() => selectedItems[idx]['scheduledAt'] = dt.toIso8601String());
+                                },
+                                child: InputDecorator(
+                                  decoration: const InputDecoration(
+                                    labelText: 'Thời gian thực hiện',
+                                    border: OutlineInputBorder(),
+                                    isDense: true,
+                                    suffixIcon: Icon(Icons.schedule, size: 18),
+                                  ),
+                                  child: Text(dtFmt.format(sched), style: const TextStyle(fontSize: 13)),
+                                ),
+                              ),
+                              const SizedBox(height: 6),
+                              Row(children: [
+                                Expanded(
+                                  flex: 2,
+                                  child: TextFormField(
+                                    controller: ctrls['qty'],
+                                    keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                                    decoration: const InputDecoration(
+                                      labelText: 'Số lượng (vôi/vi sinh…)',
+                                      isDense: true,
+                                      border: OutlineInputBorder(),
+                                    ),
+                                    onChanged: (v) => selectedItems[idx]['quantity'] = double.tryParse(v.replaceAll(',', '.')),
+                                  ),
+                                ),
+                                const SizedBox(width: 6),
+                                Expanded(
+                                  flex: 1,
+                                  child: TextFormField(
+                                    controller: ctrls['unit'],
+                                    decoration: const InputDecoration(
+                                      labelText: 'ĐV',
+                                      isDense: true,
+                                      border: OutlineInputBorder(),
+                                    ),
+                                    onChanged: (v) => selectedItems[idx]['unit'] = v,
+                                  ),
+                                ),
+                              ]),
+                              const SizedBox(height: 6),
+                              TextFormField(
+                                controller: ctrls['note'],
+                                maxLines: 2,
+                                minLines: 1,
+                                decoration: const InputDecoration(
+                                  labelText: 'Phát sinh / ghi chú hạng mục',
+                                  hintText: 'Ví dụ: vá thêm chỗ thứ 2, dùng hết 5kg vôi…',
+                                  isDense: true,
+                                  border: OutlineInputBorder(),
+                                ),
+                                onChanged: (v) => selectedItems[idx]['note'] = v,
+                              ),
+                            ],
+                          ),
+                        );
+                      }),
+                    ],
+                    // ── Nút thêm hạng mục phát sinh ──
+                    Align(
+                      alignment: Alignment.centerLeft,
+                      child: TextButton.icon(
+                        icon: const Icon(Icons.add_task, size: 18),
+                        label: const Text('Thêm hạng mục phát sinh', style: TextStyle(fontSize: 13)),
+                        onPressed: () async {
+                          final nameCtrl = TextEditingController();
+                          final ok = await showDialog<bool>(
+                            context: ctx,
+                            builder: (c) => AlertDialog(
+                              title: const Text('Hạng mục phát sinh'),
+                              content: TextField(
+                                controller: nameCtrl,
+                                autofocus: true,
+                                decoration: const InputDecoration(labelText: 'Tên công việc', border: OutlineInputBorder()),
+                              ),
+                              actions: [
+                                TextButton(onPressed: () => Navigator.pop(c, false), child: const Text('Huỷ')),
+                                FilledButton(onPressed: () => Navigator.pop(c, true), child: const Text('Thêm')),
+                              ],
+                            ),
+                          );
+                          final name = nameCtrl.text.trim();
+                          nameCtrl.dispose();
+                          if (ok == true && name.isNotEmpty) {
+                            setSt(() => selectedItems.add({
+                              'name': name,
+                              'category': 'Phát sinh',
+                              'scheduledAt': DateTime.now().toIso8601String(),
+                              'quantity': null,
+                              'unit': suggestUnit(name),
+                              'note': '',
+                            }));
+                          }
+                        },
+                      ),
+                    ),
+
+                    const SizedBox(height: 8),
                     const Divider(),
                     const SizedBox(height: 8),
 
@@ -4520,6 +4729,12 @@ class _FarmMapViewState extends State<FarmMapView> {
     });
 
     noteCtrl.dispose();
+    for (final m in itemDetailCtrls.values) {
+      for (final c in m.values) {
+        c.dispose();
+      }
+    }
+    itemDetailCtrls.clear();
 
     if (log != null) {
       _showSnack('${pond.code} đã chuyển sang bảo trì – ${selectedItems.length} hạng mục');
@@ -4637,6 +4852,15 @@ class _FarmMapViewState extends State<FarmMapView> {
                       final i = entry.key;
                       final item = entry.value;
                       final isDone = item['status'] == 'done';
+                      final sched = DateTime.tryParse(item['scheduledAt'] ?? '');
+                      final qty = item['quantity'];
+                      final unit = item['unit'] ?? '';
+                      final itemNote = (item['note'] ?? '').toString();
+                      final detailLines = <String>[
+                        if (sched != null) '🕒 ${DateFormat('dd/MM/yyyy HH:mm').format(sched)}',
+                        if (qty != null && qty is num && qty > 0) '⚖️ $qty $unit',
+                        if (itemNote.isNotEmpty) '📝 $itemNote',
+                      ];
                       return Card(
                         margin: const EdgeInsets.only(bottom: 6),
                         color: isDone ? AppColors.success.withAlpha(15) : null,
@@ -4665,7 +4889,7 @@ class _FarmMapViewState extends State<FarmMapView> {
                             ),
                           ),
                           subtitle: Text(
-                            item['category'] ?? '',
+                            [item['category'] ?? '', ...detailLines].where((s) => s.toString().isNotEmpty).join('  ·  '),
                             style: TextStyle(fontSize: 11, color: isDone ? AppColors.textHint : AppColors.textSecondary),
                           ),
                           trailing: isDone
