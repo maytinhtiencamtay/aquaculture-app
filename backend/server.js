@@ -594,14 +594,21 @@ function crudRoutes(resource) {
     if (db[resource][idx].storeId && req.user.storeId && db[resource][idx].storeId !== req.user.storeId) {
       return res.status(403).json({ message: 'Không có quyền chỉnh sửa' });
     }
-    // Validate fishbatch pondAllocations — prevent over-allocation
+    // Validate fishbatch pondAllocations — prevent over-allocation.
+    // Use incoming currentQuantity when provided (client may sync it in same PUT),
+    // fallback to stored value. Also allow if the total does not exceed the
+    // previously-allocated total (i.e. a transfer that preserves count).
     if (resource === 'fishbatches' && Array.isArray(req.body.pondAllocations)) {
       const batch = db[resource][idx];
-      const currentQty = batch.currentQuantity || batch.initialQuantity || 0;
+      const incomingQty = typeof req.body.currentQuantity === 'number' ? req.body.currentQuantity : null;
+      const storedQty = batch.currentQuantity || batch.initialQuantity || 0;
+      const currentQty = incomingQty !== null ? incomingQty : storedQty;
+      const prevAlloc = (batch.pondAllocations || []).reduce((s, a) => s + (a.quantity || 0), 0);
       const totalAlloc = req.body.pondAllocations.reduce((s, a) => s + (a.quantity || 0), 0);
-      if (totalAlloc > currentQty) {
+      const cap = Math.max(currentQty, prevAlloc);
+      if (totalAlloc > cap) {
         return res.status(400).json({
-          message: `Tổng phân bổ (${totalAlloc}) vượt quá số cá hiện có (${currentQty} con)`,
+          message: `Tổng phân bổ (${totalAlloc}) vượt quá số cá hiện có (${cap} con)`,
         });
       }
     }

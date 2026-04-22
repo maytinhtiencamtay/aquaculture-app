@@ -2887,10 +2887,15 @@ class _FarmMapViewState extends State<FarmMapView> {
         newAllocs.add({'pondId': targetPondId, 'quantity': transferQty});
       }
 
+      // Sync currentQuantity with allocation total so server validation passes
+      // even if stored data was out of sync before.
+      final allocTotal = newAllocs.fold<int>(0, (s, a) => s + ((a['quantity'] as num?)?.toInt() ?? 0));
+      final syncedQty = allocTotal > batch.currentQuantity ? allocTotal : batch.currentQuantity;
       final updatedBatch = await dp.update('fishbatches', batch.id, {
         ...batch.toJson(),
         'pondAllocations': newAllocs,
         'pondId': newAllocs.isNotEmpty ? newAllocs.first['pondId'] : batch.pondId,
+        'currentQuantity': syncedQty,
       });
       if (!updatedBatch) {
         _showSnack('Không thể cập nhật phân bổ cá khi chuyển ao');
@@ -3003,10 +3008,13 @@ class _FarmMapViewState extends State<FarmMapView> {
       newAllocs.add({'pondId': toPondId, 'quantity': actualQty});
     }
 
+    final allocTotal = newAllocs.fold<int>(0, (s, a) => s + ((a['quantity'] as num?)?.toInt() ?? 0));
+    final syncedQty = allocTotal > batch.currentQuantity ? allocTotal : batch.currentQuantity;
     final updatedBatch = await dp.update('fishbatches', batch.id, {
       ...batch.toJson(),
       'pondAllocations': newAllocs,
       'pondId': newAllocs.isNotEmpty ? newAllocs.first['pondId'] : batch.pondId,
+      'currentQuantity': syncedQty,
     });
     if (!updatedBatch) {
       _showSnack('Không thể cập nhật phân bổ cá khi thực hiện lịch chuyển');
