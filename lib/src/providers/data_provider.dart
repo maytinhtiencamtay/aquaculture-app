@@ -75,6 +75,7 @@ class DataProvider extends ChangeNotifier {
   List<Map<String, dynamic>> feedingLogs = [];
   List<Map<String, dynamic>> mortalityLogs = [];
   List<Map<String, dynamic>> maintenanceLogs = [];
+  List<Map<String, dynamic>> transfers = [];
   List<Map<String, dynamic>> searchResults = [];
   Map<String, dynamic> dashboardData = {};
 
@@ -128,6 +129,7 @@ class DataProvider extends ChangeNotifier {
         _api.fetchList('dailylogs'),
         _api.fetchList('waterchangelogs'),
         _api.fetchList('sizemeasurements'),
+        _api.fetchList('transfers'),
       ]);
       branches = results[0].map((e) => Branch.fromJson(e)).toList();
       zones = results[1].map((e) => Zone.fromJson(e)).toList();
@@ -160,6 +162,7 @@ class DataProvider extends ChangeNotifier {
       dailyLogs = results[28].map((e) => DailyLog.fromJson(e)).toList();
       waterChangeLogs = results[29].map((e) => WaterChangeLog.fromJson(e)).toList();
       sizeMeasurements = results[30].map((e) => SizeMeasurement.fromJson(e)).toList();
+      transfers = results[31];
       await loadDashboard();
     } catch (e) {
       debugPrint('loadAll error: $e');
@@ -220,6 +223,7 @@ class DataProvider extends ChangeNotifier {
       case 'dailylogs': dailyLogs = list.map((e) => DailyLog.fromJson(e)).toList();
       case 'waterchangelogs': waterChangeLogs = list.map((e) => WaterChangeLog.fromJson(e)).toList();
       case 'sizemeasurements': sizeMeasurements = list.map((e) => SizeMeasurement.fromJson(e)).toList();
+      case 'transfers': transfers = list;
       default: debugPrint('[DP] reload: unknown resource $resource');
     }
     notifyListeners();
@@ -238,7 +242,7 @@ class DataProvider extends ChangeNotifier {
     'stockissues':     ['products', 'fishbatches', 'feedinglogs'],
     'paymentvouchers': ['customers'],
     'ponds':           ['sensorreadings', 'notifications', 'fishbatches', 'tasks'],
-    'fishbatches':     ['ponds'],
+    'fishbatches':     ['ponds', 'transfers'],
     'maintenancelogs': ['ponds', 'products', 'tasks'],
     'diseaselogs':      ['treatmentlogs', 'notifications'],
     'treatmentlogs':    ['diseaselogs', 'notifications'],
@@ -246,6 +250,7 @@ class DataProvider extends ChangeNotifier {
     'cropcycles':       ['fishbatches'],
     'waterchangelogs':  ['ponds'],
     'sizemeasurements': ['fishbatches'],
+    'transfers':        ['fishbatches', 'ponds'],
   };
 
   Future<void> _reloadWithCascade(String resource) async {

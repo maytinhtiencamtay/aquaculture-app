@@ -1438,7 +1438,7 @@ class _FarmMapViewState extends State<FarmMapView> {
     final events = <_PondTimelineEvent>[];
 
     // 1. Thả cá
-    for (final b in dp.fishBatches.where((b) => b.pondId == pond.id)) {
+    for (final b in dp.fishBatches.where((b) => b.pondIds.contains(pond.id))) {
       final sp = dp.speciesById(b.speciesId);
       events.add(_PondTimelineEvent(
         date: b.createdAt,
@@ -1571,7 +1571,7 @@ class _FarmMapViewState extends State<FarmMapView> {
       // Match by pondId (primary) or by fishBatchId matching pond's batches
       bool relevant = so.pondId == pond.id;
       if (!relevant) {
-        for (final b in dp.fishBatches.where((b) => b.pondId == pond.id)) {
+        for (final b in dp.fishBatches.where((b) => b.pondIds.contains(pond.id))) {
           if (so.fishBatchId == b.id || so.items.any((it) => it['fishBatchId'] == b.id)) {
             relevant = true;
             break;
@@ -1590,13 +1590,38 @@ class _FarmMapViewState extends State<FarmMapView> {
       ));
     }
 
-    // 10. Chuyển cá (transfers referencing this pond)
-    for (final t in dp.tasks.where((t) => t.type == 'transfer' && t.pondId == pond.id)) {
+    // 10. Chuyển cá — ưu tiên bản ghi thực tế trong `transfers`.
+    // Hiển thị ở cả ao nguồn (trừ) và ao đích (cộng).
+    for (final t in dp.transfers) {
+      final fromId = t['fromPondId']?.toString() ?? '';
+      final toId = t['toPondId']?.toString() ?? '';
+      if (fromId != pond.id && toId != pond.id) continue;
+      final qty = (t['qty'] as num?)?.toInt() ?? (t['quantity'] as num?)?.toInt() ?? 0;
+      final dateStr = (t['date'] ?? t['createdAt'])?.toString() ?? '';
+      final date = DateTime.tryParse(dateStr) ?? DateTime.now();
+      final fromCode = dp.pondById(fromId)?.code ?? '?';
+      final toCode = dp.pondById(toId)?.code ?? '?';
+      final reason = (t['reason'] ?? '').toString();
+      final isOut = fromId == pond.id;
+      final batch = dp.fishBatches.where((b) => b.id == (t['fishBatchId']?.toString() ?? '')).firstOrNull;
+      final spName = batch != null ? (dp.speciesById(batch.speciesId)?.name ?? '') : '';
+      events.add(_PondTimelineEvent(
+        date: date,
+        icon: isOut ? Icons.logout_rounded : Icons.login_rounded,
+        color: isOut ? AppColors.error : AppColors.success,
+        title: isOut
+            ? 'Chuyển đi: $qty con → $toCode'
+            : 'Nhận cá: $qty con ← $fromCode',
+        subtitle: [if (spName.isNotEmpty) spName, if (reason.isNotEmpty) reason].join(' · '),
+      ));
+    }
+    // Lịch chuyển cá chưa thực hiện (task)
+    for (final t in dp.tasks.where((t) => t.type == 'transfer' && t.pondId == pond.id && t.status != 'completed')) {
       events.add(_PondTimelineEvent(
         date: t.dueDate,
-        icon: Icons.swap_horiz_rounded,
+        icon: Icons.schedule_rounded,
         color: AppColors.info,
-        title: 'Chuyển cá',
+        title: 'Lịch chuyển cá (chờ thực hiện)',
         subtitle: t.title,
       ));
     }
@@ -1618,7 +1643,7 @@ class _FarmMapViewState extends State<FarmMapView> {
     }
 
     // 12. Đo kích thước
-    final pondBatchIds = dp.fishBatches.where((b) => b.pondId == pond.id).map((b) => b.id).toSet();
+    final pondBatchIds = dp.fishBatches.where((b) => b.pondIds.contains(pond.id)).map((b) => b.id).toSet();
     for (final m in dp.sizeMeasurements.where((m) => m.pondId == pond.id || (m.pondId.isEmpty && pondBatchIds.contains(m.fishBatchId)))) {
       final batch = dp.fishBatches.where((b) => b.id == m.fishBatchId).firstOrNull;
       final batchName = batch?.name ?? 'Lô #${m.fishBatchId.substring(0, 6)}';
